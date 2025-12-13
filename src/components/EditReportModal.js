@@ -24,6 +24,8 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
   const [categoryId, setCategoryId] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [offender, setOffender] = useState("");
+
+  // 🔑 ALL dynamic fields live here
   const [fields, setFields] = useState({});
 
   const [categories, setCategories] = useState([]);
@@ -48,7 +50,7 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
     loadLookups();
   }, []);
 
-  // ---------------- LOAD REPORT ----------------
+  // ---------------- LOAD REPORT (CRITICAL FIX) ----------------
   useEffect(() => {
     if (!report) return;
 
@@ -57,7 +59,12 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
     setCategoryId(report.categoryId || "");
     setSubcategory(report.subcategory || "");
     setOffender(report.offender || "");
-    setFields(report.fields || {});
+
+    // ✅ NORMALIZE fields so policeReport ALWAYS exists
+    setFields({
+      policeReport: report.fields?.policeReport || "",
+      ...report.fields,
+    });
   }, [report]);
 
   // ---------------- CATEGORY → SUBCATEGORIES ----------------
@@ -155,6 +162,7 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
             ))}
           </TextField>
 
+          {/* 🔑 DYNAMIC FIELDS (policeReport WILL SHOW) */}
           {Object.entries(fields).map(([key, value]) => (
             <TextField
               key={key}
