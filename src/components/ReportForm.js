@@ -35,6 +35,8 @@ export default function ReportForm() {
   const [fieldValues, setFieldValues] = useState({});
   const [selectedSub, setSelectedSub] = useState("");
 
+  const [submitting, setSubmitting] = useState(false); // ✅ NEW
+
   const [snack, setSnack] = useState({
     open: false,
     message: "",
@@ -86,6 +88,7 @@ export default function ReportForm() {
     setFieldValues((prev) => ({ ...prev, [name]: value }));
   }
 
+  // ---------------- SUBMIT ----------------
   async function submitReport() {
     if (!selectedCatId || !selectedSub) {
       setSnack({
@@ -97,6 +100,8 @@ export default function ReportForm() {
     }
 
     try {
+      setSubmitting(true); // ✅ DISABLE BUTTON
+
       await addDoc(collection(db, "reports"), {
         reporterId: user?.uid || null,
         reporterName: user?.name || "Guest",
@@ -130,6 +135,8 @@ export default function ReportForm() {
         message: "Failed to submit report",
         severity: "error",
       });
+    } finally {
+      setSubmitting(false); // ✅ RE-ENABLE BUTTON
     }
   }
 
@@ -214,14 +221,17 @@ export default function ReportForm() {
             size={isMobile ? "large" : "medium"}
             fullWidth
             onClick={submitReport}
+            disabled={submitting}   // ✅ DISABLED WHILE SAVING
             sx={{ mt: 1 }}
           >
-            Submit Report
+            {submitting ? "Submitting…" : "Submit Report"}
           </Button>
         </Stack>
       </Paper>
 
+      {/* ✅ SNACKBAR FIXED */}
       <Snackbar
+        key={snack.message}
         open={snack.open}
         autoHideDuration={4000}
         onClose={() => setSnack((s) => ({ ...s, open: false }))}
