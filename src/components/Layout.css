@@ -1,0 +1,43 @@
+.layout-container {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.top-nav {
+  display: flex;
+  justify-content: space-between;
+  background: #1a1a1a;
+  padding: 8px 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.nav-left,
+.nav-right {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.nav-item {
+  color: white;
+  text-decoration: none;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 6px;
+  transition: 0.15s;
+}
+
+.nav-item:hover {
+  background: #333;
+}
+
+.nav-item.active {
+  background: #0077ff;
+}
+
+.content-area {
+  padding: 16px;
+}
