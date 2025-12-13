@@ -11,7 +11,9 @@ import {
   TableRow,
   Paper,
   Chip,
+  Tooltip,
 } from "@mui/material";
+
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -37,16 +39,10 @@ export default function AdminDashboard() {
 
   async function loadData() {
     const catSnap = await getDocs(collection(db, "categories"));
-    const cats = catSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    setCategories(cats);
+    setCategories(catSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
     const repSnap = await getDocs(collection(db, "reports"));
-    const reps = repSnap.docs.map(d => ({
-      id: d.id,
-      ...d.data(),
-    }));
-
-    setReports(reps);
+    setReports(repSnap.docs.map(d => ({ id: d.id, ...d.data() })));
   }
 
   function categoryName(id) {
@@ -62,6 +58,7 @@ export default function AdminDashboard() {
   async function toggleStatus(report) {
     const newStatus = report.status === "Complete" ? "Pending" : "Complete";
     await updateDoc(doc(db, "reports", report.id), { status: newStatus });
+
     setReports(r =>
       r.map(x => (x.id === report.id ? { ...x, status: newStatus } : x))
     );
@@ -70,10 +67,10 @@ export default function AdminDashboard() {
   async function saveEdit(updated) {
     await updateDoc(doc(db, "reports", updated.id), {
       categoryId: updated.categoryId,
-      subcategory: updated.subcategory,
       offender: updated.offender,
       adminComment: updated.adminComment || "",
       fields: updated.fields,
+      status: updated.status,
     });
 
     setReports(r =>
@@ -83,49 +80,82 @@ export default function AdminDashboard() {
   }
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Typography variant="h5" sx={{ mb: 2 }}>
+    <Box sx={{ p: 0.5 }}>
+      <Typography variant="h6" sx={{ mb: 0.5 }}>
         Admin Dashboard
       </Typography>
 
-      <TableContainer
-        component={Paper}
-        sx={{
-          overflowX: "auto",
-        }}
-      >
-        <Table size="small">
+      <TableContainer component={Paper} sx={{ overflowX: "auto" }}>
+        <Table
+          size="small"
+          sx={{
+            "& th, & td": {
+              padding: "2px 4px",   // 🔥 EVEN TIGHTER
+              fontSize: "0.72rem",
+              lineHeight: 1.2,
+              whiteSpace: "nowrap",
+            },
+          }}
+        >
           <TableHead>
             <TableRow>
               <TableCell>Date</TableCell>
               <TableCell>Category</TableCell>
-              <TableCell>Subcategory</TableCell>
               <TableCell>Offender</TableCell>
-              <TableCell>Store #</TableCell>
-              <TableCell>Police Report</TableCell>
+              <TableCell>PR #</TableCell>
+
+              {/* DETAILS — MAX SPACE */}
+              <TableCell
+                sx={{
+                  minWidth: 420,
+                  whiteSpace: "normal",
+                }}
+              >
+                Details
+              </TableCell>
+
               <TableCell>Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
 
           <TableBody>
-            {reports.map((r) => (
+            {reports.map(r => (
               <TableRow key={r.id} hover>
                 <TableCell>
                   {r.createdAt?.toDate?.().toLocaleDateString()}
                 </TableCell>
 
                 <TableCell>{categoryName(r.categoryId)}</TableCell>
-                <TableCell>{r.subcategory}</TableCell>
                 <TableCell>{r.offender || "—"}</TableCell>
-                <TableCell>{r.fields?.["Store Number"] || "—"}</TableCell>
                 <TableCell>{r.fields?.policeReport || "—"}</TableCell>
+
+                {/* DETAILS CELL */}
+                <TableCell
+                  sx={{
+                    maxWidth: 520,
+                    whiteSpace: "normal",
+                  }}
+                >
+                  <Tooltip title={r.fields?.Details || ""} arrow>
+                    <span
+                      style={{
+                        display: "block",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {r.fields?.Details || "—"}
+                    </span>
+                  </Tooltip>
+                </TableCell>
 
                 <TableCell>
                   <Chip
                     size="small"
                     label={r.status}
                     color={r.status === "Complete" ? "success" : "warning"}
+                    sx={{ height: 18, fontSize: "0.65rem" }}
                   />
                 </TableCell>
 
@@ -151,7 +181,7 @@ export default function AdminDashboard() {
 
             {reports.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} align="center">
+                <TableCell colSpan={7} align="center">
                   No reports found
                 </TableCell>
               </TableRow>
