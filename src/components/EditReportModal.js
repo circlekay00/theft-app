@@ -20,7 +20,7 @@ import {
   serverTimestamp
 } from "firebase/firestore";
 
-export default function EditReportModal({ open, onClose, report }) {
+export default function EditReportModal({ open, onClose, report, onSave }) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
@@ -42,7 +42,7 @@ export default function EditReportModal({ open, onClose, report }) {
     setSubcategory(report.subcategory || "");
     setOffender(report.offender || "");
     setPoliceReport(report.fields?.policeReport || "");
-    setDetails(report.fields?.Details || ""); // ✅ FIX
+    setDetails(report.fields?.Details || "");
     setAdminComment(report.adminComment || "");
     setStatus(report.status || "Pending");
   }, [open, report]);
@@ -68,6 +68,22 @@ export default function EditReportModal({ open, onClose, report }) {
   }
 
   async function handleSave() {
+    const updatedReport = {
+      ...report, // ⛔ NOTHING LOST
+      categoryId,
+      subcategory,
+      offender,
+      status,
+      adminComment,
+      fields: {
+        ...report.fields,
+        policeReport,
+        Details: details
+      },
+      updatedAt: new Date()
+    };
+
+    // 🔥 Firestore update (unchanged behavior)
     await updateDoc(doc(db, "reports", report.id), {
       categoryId,
       subcategory,
@@ -78,9 +94,14 @@ export default function EditReportModal({ open, onClose, report }) {
       fields: {
         ...report.fields,
         policeReport,
-        Details: details // ✅ FIX
+        Details: details
       }
     });
+
+    // 🔥 THIS IS THE MISSING PIECE
+    if (onSave) {
+      onSave(updatedReport);
+    }
 
     onClose();
   }
@@ -88,12 +109,17 @@ export default function EditReportModal({ open, onClose, report }) {
   const selectedCategory = categories.find(c => c.id === categoryId);
 
   return (
-    <Dialog open={open} onClose={onClose} fullScreen={fullScreen} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullScreen={fullScreen}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>Edit Report</DialogTitle>
 
       <DialogContent>
         <Stack spacing={1.2} sx={{ mt: 1 }}>
-
           <TextField
             select
             label="Category"
@@ -144,7 +170,6 @@ export default function EditReportModal({ open, onClose, report }) {
             fullWidth
           />
 
-          {/* ✅ DETAILS FIXED */}
           <TextField
             label="Details"
             value={details}
@@ -173,7 +198,6 @@ export default function EditReportModal({ open, onClose, report }) {
             multiline
             rows={2}
           />
-
         </Stack>
       </DialogContent>
 
