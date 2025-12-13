@@ -17,6 +17,7 @@ import {
   TableRow,
   TablePagination,
   Tooltip,
+  Chip,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 
@@ -54,6 +55,7 @@ export default function AdminDashboard() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(15);
 
+  // ---------------- LOAD DATA ----------------
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -89,6 +91,7 @@ export default function AdminDashboard() {
     load();
   }, []);
 
+  // ---------------- SEARCH + FILTER ----------------
   useEffect(() => {
     const txt = search.toLowerCase().trim();
 
@@ -109,12 +112,14 @@ export default function AdminDashboard() {
     setPage(0);
   }, [search, statusFilter, categoryFilter, reports]);
 
+  // ---------------- SAVE EDIT ----------------
   const handleSaveEditedReport = async (updatedReport) => {
     const ref = doc(db, "reports", updatedReport.id);
 
     await updateDoc(ref, {
       status: updatedReport.status,
       adminComment: updatedReport.adminComment || "",
+      offender: updatedReport.offender || "",
       fields: { ...updatedReport.fields },
       updatedAt: new Date(),
     });
@@ -130,6 +135,7 @@ export default function AdminDashboard() {
     setSelectedReport(null);
   };
 
+  // ---------------- EXPORT PDF ----------------
   const exportPDF = () => {
     const docu = new jsPDF("l", "pt", "a4");
 
@@ -150,7 +156,7 @@ export default function AdminDashboard() {
         r.createdAt?.toDate?.().toLocaleString() || "",
         r.categoryName,
         r.status,
-        r.fields?.offender || "",
+        r.offender || "",
         r.fields?.policeReport || "",
         r.fields?.Details || "",
         r.adminComment || "",
@@ -172,6 +178,7 @@ export default function AdminDashboard() {
         </Typography>
       </Stack>
 
+      {/* FILTER BAR */}
       <Paper sx={{ p: 1, mb: 1, borderRadius: 2 }}>
         <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
           <TextField
@@ -228,6 +235,7 @@ export default function AdminDashboard() {
         </Stack>
       </Paper>
 
+      {/* TABLE */}
       {loading ? (
         <CircularProgress size={24} />
       ) : (
@@ -242,7 +250,7 @@ export default function AdminDashboard() {
                   <TableCell>Offender</TableCell>
                   <TableCell>Police</TableCell>
                   <TableCell sx={{ width: "40%" }}>Details</TableCell>
-                  <TableCell>Actions</TableCell>
+                  <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
 
@@ -258,10 +266,19 @@ export default function AdminDashboard() {
                       <TableCell>
                         {r.createdAt?.toDate?.().toLocaleDateString()}
                       </TableCell>
-                      <TableCell>{r.categoryName}</TableCell>
-                      <TableCell>{r.status}</TableCell>
-                      <TableCell>{r.offender || "—"}</TableCell>
 
+                      <TableCell>{r.categoryName}</TableCell>
+
+                      <TableCell>
+                        <Chip
+                          label={r.status}
+                          size="small"
+                          color={r.status === "Complete" ? "success" : "warning"}
+                          sx={{ fontSize: "0.65rem", height: 20 }}
+                        />
+                      </TableCell>
+
+                      <TableCell>{r.offender || "—"}</TableCell>
                       <TableCell>{r.fields?.policeReport || "—"}</TableCell>
 
                       <TableCell>
@@ -280,13 +297,31 @@ export default function AdminDashboard() {
                         </Tooltip>
                       </TableCell>
 
-                      <TableCell>
-                        <Button size="small" onClick={() => {
-                          setSelectedReport(r);
-                          setEditOpen(true);
-                        }}>
-                          Edit
-                        </Button>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setSelectedReport(r);
+                              setEditOpen(true);
+                            }}
+                          >
+                            Edit
+                          </Button>
+
+                          <Button
+                            size="small"
+                            color="error"
+                            onClick={async () => {
+                              if (!window.confirm("Delete this report?")) return;
+                              await deleteDoc(doc(db, "reports", r.id));
+                              setReports(p => p.filter(x => x.id !== r.id));
+                              setFilteredReports(p => p.filter(x => x.id !== r.id));
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </Stack>
                       </TableCell>
                     </TableRow>
                   ))}
