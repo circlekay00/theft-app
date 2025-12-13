@@ -12,6 +12,7 @@ import {
   Paper,
   Chip,
   Tooltip,
+  TablePagination,
 } from "@mui/material";
 
 import EditIcon from "@mui/icons-material/Edit";
@@ -32,6 +33,10 @@ export default function AdminDashboard() {
   const [reports, setReports] = useState([]);
   const [categories, setCategories] = useState([]);
   const [editing, setEditing] = useState(null);
+
+  // pagination
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   useEffect(() => {
     loadData();
@@ -79,9 +84,14 @@ export default function AdminDashboard() {
     setEditing(null);
   }
 
+  const paginated = reports.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
   return (
-    <Box sx={{ p: 0.5 }}>
-      <Typography variant="h6" sx={{ mb: 0.5 }}>
+    <Box sx={{ p: 0.25 }}>
+      <Typography variant="h6" sx={{ mb: 0.25, fontSize: "0.9rem" }}>
         Admin Dashboard
       </Typography>
 
@@ -90,9 +100,9 @@ export default function AdminDashboard() {
           size="small"
           sx={{
             "& th, & td": {
-              padding: "2px 4px",   // 🔥 EVEN TIGHTER
-              fontSize: "0.72rem",
-              lineHeight: 1.2,
+              padding: "1px 3px",      // 🔥 EXCEL-LEVEL DENSE
+              fontSize: "0.68rem",
+              lineHeight: 1.15,
               whiteSpace: "nowrap",
             },
           }}
@@ -107,7 +117,7 @@ export default function AdminDashboard() {
               {/* DETAILS — MAX SPACE */}
               <TableCell
                 sx={{
-                  minWidth: 420,
+                  minWidth: 500,
                   whiteSpace: "normal",
                 }}
               >
@@ -120,7 +130,7 @@ export default function AdminDashboard() {
           </TableHead>
 
           <TableBody>
-            {reports.map(r => (
+            {paginated.map(r => (
               <TableRow key={r.id} hover>
                 <TableCell>
                   {r.createdAt?.toDate?.().toLocaleDateString()}
@@ -133,7 +143,7 @@ export default function AdminDashboard() {
                 {/* DETAILS CELL */}
                 <TableCell
                   sx={{
-                    maxWidth: 520,
+                    maxWidth: 600,
                     whiteSpace: "normal",
                   }}
                 >
@@ -155,7 +165,10 @@ export default function AdminDashboard() {
                     size="small"
                     label={r.status}
                     color={r.status === "Complete" ? "success" : "warning"}
-                    sx={{ height: 18, fontSize: "0.65rem" }}
+                    sx={{
+                      height: 16,
+                      fontSize: "0.6rem",
+                    }}
                   />
                 </TableCell>
 
@@ -188,6 +201,25 @@ export default function AdminDashboard() {
             )}
           </TableBody>
         </Table>
+
+        {/* PAGINATION */}
+        <TablePagination
+          component="div"
+          count={reports.length}
+          page={page}
+          onPageChange={(_, p) => setPage(p)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={e => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          sx={{
+            "& *": {
+              fontSize: "0.65rem",
+            },
+          }}
+        />
       </TableContainer>
 
       <EditReportModal
