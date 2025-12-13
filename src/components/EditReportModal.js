@@ -1,4 +1,3 @@
-// src/components/EditReportModal.js
 import React, { useEffect, useState } from "react";
 import {
   Dialog,
@@ -9,115 +8,79 @@ import {
   TextField,
   MenuItem,
   Stack,
-  useTheme,
-  useMediaQuery,
 } from "@mui/material";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 
 export default function EditReportModal({ open, report, onClose, onSave }) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const [status, setStatus] = useState("Pending");
-  const [adminComment, setAdminComment] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [offenders, setOffenders] = useState([]);
+
   const [categoryId, setCategoryId] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [offender, setOffender] = useState("");
+  const [policeReport, setPoliceReport] = useState("");
+  const [adminComment, setAdminComment] = useState("");
 
-  // 🔑 ALL dynamic fields live here
-  const [fields, setFields] = useState({});
-
-  const [categories, setCategories] = useState([]);
-  const [subcategories, setSubcategories] = useState([]);
-  const [offenders, setOffenders] = useState([]);
-
-  // ---------------- LOAD LOOKUPS ----------------
   useEffect(() => {
-    const loadLookups = async () => {
-      const catSnap = await getDocs(collection(db, "categories"));
-      setCategories(catSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-
-      const offSnap = await getDocs(collection(db, "offenders"));
-      setOffenders(
-        offSnap.docs.map(d => ({
-          id: d.id,
-          name: d.data().name,
-        }))
-      );
-    };
-
     loadLookups();
   }, []);
 
-  // ---------------- LOAD REPORT (CRITICAL FIX) ----------------
   useEffect(() => {
-    if (!report) return;
-
-    setStatus(report.status || "Pending");
-    setAdminComment(report.adminComment || "");
-    setCategoryId(report.categoryId || "");
-    setSubcategory(report.subcategory || "");
-    setOffender(report.offender || "");
-
-    // ✅ NORMALIZE fields so policeReport ALWAYS exists
-    setFields({
-      policeReport: report.fields?.policeReport || "",
-      ...report.fields,
-    });
+    if (report) {
+      setCategoryId(report.categoryId || "");
+      setSubcategory(report.subcategory || "");
+      setOffender(report.offender || "");
+      setPoliceReport(report.fields?.policeReport || "");
+      setAdminComment(report.adminComment || "");
+    }
   }, [report]);
 
-  // ---------------- CATEGORY → SUBCATEGORIES ----------------
-  useEffect(() => {
-    const cat = categories.find(c => c.id === categoryId);
-    setSubcategories(cat?.subcategories || []);
+  async function loadLookups() {
+    const catSnap = await getDocs(collection(db, "categories"));
+    setCategories(catSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-    if (subcategory && !cat?.subcategories?.includes(subcategory)) {
-      setSubcategory("");
-    }
-  }, [categoryId, categories]);
+    const offSnap = await getDocs(collection(db, "offenders"));
+    setOffenders(offSnap.docs.map(d => d.data().name));
+  }
 
-  const handleFieldChange = (name, value) => {
-    setFields(prev => ({ ...prev, [name]: value }));
-  };
+  if (!report) return null;
 
-  const handleSave = () => {
+  const subcategories =
+    categories.find(c => c.id === categoryId)?.subcategories || [];
+
+  function handleSave() {
     onSave({
       ...report,
-      status,
-      adminComment,
       categoryId,
       subcategory,
       offender,
-      fields: { ...fields },
+      adminComment,
+      fields: {
+        ...report.fields,
+        policeReport,
+      },
     });
-  };
-
-  if (!report) return null;
+  }
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      fullScreen={isMobile}
+      fullScreen={fullScreen}
       maxWidth="sm"
       fullWidth
+      scroll="paper"
     >
       <DialogTitle>Edit Report</DialogTitle>
 
-      <DialogContent>
+      <DialogContent dividers>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
-            select
-            label="Status"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            fullWidth
-          >
-            <MenuItem value="Pending">Pending</MenuItem>
-            <MenuItem value="Complete">Complete</MenuItem>
-          </TextField>
-
           <TextField
             select
             label="Category"
@@ -125,7 +88,7 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
             onChange={(e) => setCategoryId(e.target.value)}
             fullWidth
           >
-            {categories.map(c => (
+            {categories.map((c) => (
               <MenuItem key={c.id} value={c.id}>
                 {c.name}
               </MenuItem>
@@ -137,8 +100,8 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
             label="Subcategory"
             value={subcategory}
             onChange={(e) => setSubcategory(e.target.value)}
-            disabled={!subcategories.length}
             fullWidth
+            disabled={!categoryId}
           >
             {subcategories.map((s, i) => (
               <MenuItem key={i} value={s}>
@@ -155,25 +118,19 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
             fullWidth
           >
             <MenuItem value="">None</MenuItem>
-            {offenders.map(o => (
-              <MenuItem key={o.id} value={o.name}>
-                {o.name}
+            {offenders.map((o) => (
+              <MenuItem key={o} value={o}>
+                {o}
               </MenuItem>
             ))}
           </TextField>
 
-          {/* 🔑 DYNAMIC FIELDS (policeReport WILL SHOW) */}
-          {Object.entries(fields).map(([key, value]) => (
-            <TextField
-              key={key}
-              label={key}
-              value={value}
-              onChange={(e) => handleFieldChange(key, e.target.value)}
-              fullWidth
-              multiline={key.toLowerCase().includes("detail")}
-              rows={key.toLowerCase().includes("detail") ? 3 : 1}
-            />
-          ))}
+          <TextField
+            label="Police Report"
+            value={policeReport}
+            onChange={(e) => setPoliceReport(e.target.value)}
+            fullWidth
+          />
 
           <TextField
             label="Admin Comment"
@@ -186,10 +143,10 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
         </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ p: 2 }}>
+      <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="contained" onClick={handleSave}>
-          Save Changes
+          Save
         </Button>
       </DialogActions>
     </Dialog>
