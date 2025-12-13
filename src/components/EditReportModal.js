@@ -1,20 +1,26 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button,
   TextField,
+  Button,
   MenuItem,
   Stack,
+  useMediaQuery
 } from "@mui/material";
-import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
-import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
+import {
+  doc,
+  updateDoc,
+  collection,
+  getDocs,
+  serverTimestamp
+} from "firebase/firestore";
 
-export default function EditReportModal({ open, report, onClose, onSave }) {
+export default function EditReportModal({ open, onClose, report }) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
@@ -25,70 +31,77 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
   const [subcategory, setSubcategory] = useState("");
   const [offender, setOffender] = useState("");
   const [policeReport, setPoliceReport] = useState("");
+  const [details, setDetails] = useState("");
   const [adminComment, setAdminComment] = useState("");
+  const [status, setStatus] = useState("Pending");
 
   useEffect(() => {
-    loadLookups();
+    if (!open || !report) return;
+
+    setCategoryId(report.categoryId || "");
+    setSubcategory(report.subcategory || "");
+    setOffender(report.offender || "");
+    setPoliceReport(report.fields?.policeReport || "");
+    setDetails(report.fields?.Details || ""); // ✅ FIX
+    setAdminComment(report.adminComment || "");
+    setStatus(report.status || "Pending");
+  }, [open, report]);
+
+  useEffect(() => {
+    loadCategories();
+    loadOffenders();
   }, []);
 
-  useEffect(() => {
-    if (report) {
-      setCategoryId(report.categoryId || "");
-      setSubcategory(report.subcategory || "");
-      setOffender(report.offender || "");
-      setPoliceReport(report.fields?.policeReport || "");
-      setAdminComment(report.adminComment || "");
-    }
-  }, [report]);
-
-  async function loadLookups() {
-    const catSnap = await getDocs(collection(db, "categories"));
-    setCategories(catSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-
-    const offSnap = await getDocs(collection(db, "offenders"));
-    setOffenders(offSnap.docs.map(d => d.data().name));
+  async function loadCategories() {
+    const snap = await getDocs(collection(db, "categories"));
+    setCategories(
+      snap.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      }))
+    );
   }
 
-  if (!report) return null;
+  async function loadOffenders() {
+    const snap = await getDocs(collection(db, "offenders"));
+    setOffenders(snap.docs.map(d => d.data().name));
+  }
 
-  const subcategories =
-    categories.find(c => c.id === categoryId)?.subcategories || [];
-
-  function handleSave() {
-    onSave({
-      ...report,
+  async function handleSave() {
+    await updateDoc(doc(db, "reports", report.id), {
       categoryId,
       subcategory,
       offender,
+      status,
       adminComment,
+      updatedAt: serverTimestamp(),
       fields: {
         ...report.fields,
         policeReport,
-      },
+        Details: details // ✅ FIX
+      }
     });
+
+    onClose();
   }
 
+  const selectedCategory = categories.find(c => c.id === categoryId);
+
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      fullScreen={fullScreen}
-      maxWidth="sm"
-      fullWidth
-      scroll="paper"
-    >
+    <Dialog open={open} onClose={onClose} fullScreen={fullScreen} maxWidth="sm" fullWidth>
       <DialogTitle>Edit Report</DialogTitle>
 
-      <DialogContent dividers>
-        <Stack spacing={2} sx={{ mt: 1 }}>
+      <DialogContent>
+        <Stack spacing={1.2} sx={{ mt: 1 }}>
+
           <TextField
             select
             label="Category"
             value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
+            onChange={e => setCategoryId(e.target.value)}
             fullWidth
           >
-            {categories.map((c) => (
+            {categories.map(c => (
               <MenuItem key={c.id} value={c.id}>
                 {c.name}
               </MenuItem>
@@ -99,11 +112,10 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
             select
             label="Subcategory"
             value={subcategory}
-            onChange={(e) => setSubcategory(e.target.value)}
+            onChange={e => setSubcategory(e.target.value)}
             fullWidth
-            disabled={!categoryId}
           >
-            {subcategories.map((s, i) => (
+            {selectedCategory?.subcategories?.map((s, i) => (
               <MenuItem key={i} value={s}>
                 {s}
               </MenuItem>
@@ -114,11 +126,11 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
             select
             label="Offender"
             value={offender}
-            onChange={(e) => setOffender(e.target.value)}
+            onChange={e => setOffender(e.target.value)}
             fullWidth
           >
             <MenuItem value="">None</MenuItem>
-            {offenders.map((o) => (
+            {offenders.map(o => (
               <MenuItem key={o} value={o}>
                 {o}
               </MenuItem>
@@ -126,20 +138,42 @@ export default function EditReportModal({ open, report, onClose, onSave }) {
           </TextField>
 
           <TextField
-            label="Police Report"
+            label="Police Report #"
             value={policeReport}
-            onChange={(e) => setPoliceReport(e.target.value)}
+            onChange={e => setPoliceReport(e.target.value)}
             fullWidth
           />
+
+          {/* ✅ DETAILS FIXED */}
+          <TextField
+            label="Details"
+            value={details}
+            onChange={e => setDetails(e.target.value)}
+            fullWidth
+            multiline
+            rows={4}
+          />
+
+          <TextField
+            select
+            label="Status"
+            value={status}
+            onChange={e => setStatus(e.target.value)}
+            fullWidth
+          >
+            <MenuItem value="Pending">Pending</MenuItem>
+            <MenuItem value="Complete">Complete</MenuItem>
+          </TextField>
 
           <TextField
             label="Admin Comment"
             value={adminComment}
-            onChange={(e) => setAdminComment(e.target.value)}
+            onChange={e => setAdminComment(e.target.value)}
             fullWidth
             multiline
-            rows={3}
+            rows={2}
           />
+
         </Stack>
       </DialogContent>
 
