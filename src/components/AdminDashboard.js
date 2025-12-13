@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import {
   Box,
   Typography,
+  TextField,
+  MenuItem,
   IconButton,
   Table,
   TableBody,
@@ -10,33 +12,37 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
-  Tooltip,
   TablePagination,
+  Stack,
+  Tooltip,
+  Button
 } from "@mui/material";
-
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import DownloadIcon from "@mui/icons-material/Download";
 
+import { db } from "../firebase";
 import {
   collection,
   getDocs,
   deleteDoc,
   doc,
-  updateDoc,
+  updateDoc
 } from "firebase/firestore";
-import { db } from "../firebase";
+
 import EditReportModal from "./EditReportModal";
 
 export default function AdminDashboard() {
   const [reports, setReports] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [editing, setEditing] = useState(null);
+  const [selected, setSelected] = useState(null);
 
-  // pagination
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   useEffect(() => {
     loadData();
@@ -44,190 +50,216 @@ export default function AdminDashboard() {
 
   async function loadData() {
     const catSnap = await getDocs(collection(db, "categories"));
-    setCategories(catSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const catMap = {};
+    catSnap.forEach(d => (catMap[d.id] = d.data().name));
+    setCategories(catMap);
 
     const repSnap = await getDocs(collection(db, "reports"));
-    setReports(repSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const list = repSnap.docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      categoryName: catMap[d.data().categoryId] || "—"
+    }));
+
+    setReports(list);
   }
 
-  function categoryName(id) {
-    return categories.find(c => c.id === id)?.name || "—";
-  }
-
-  async function deleteReport(id) {
+  async function handleDelete(id) {
     if (!window.confirm("Delete this report?")) return;
     await deleteDoc(doc(db, "reports", id));
-    setReports(r => r.filter(x => x.id !== id));
+    loadData();
   }
 
-  async function toggleStatus(report) {
-    const newStatus = report.status === "Complete" ? "Pending" : "Complete";
-    await updateDoc(doc(db, "reports", report.id), { status: newStatus });
-
-    setReports(r =>
-      r.map(x => (x.id === report.id ? { ...x, status: newStatus } : x))
-    );
-  }
-
-  async function saveEdit(updated) {
-    await updateDoc(doc(db, "reports", updated.id), {
-      categoryId: updated.categoryId,
-      offender: updated.offender,
-      adminComment: updated.adminComment || "",
-      fields: updated.fields,
-      status: updated.status,
+  async function toggleStatus(r) {
+    await updateDoc(doc(db, "reports", r.id), {
+      status: r.status === "Complete" ? "Pending" : "Complete"
     });
-
-    setReports(r =>
-      r.map(x => (x.id === updated.id ? updated : x))
-    );
-    setEditing(null);
+    loadData();
   }
 
-  const paginated = reports.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+  function exportCSV() {
+    const rows = filtered.map(r => ({
+      Category: r.categoryName,
+      Offender: r.offender || "",
+      PoliceReport: r.fields?.policeReport || "",
+      Status: r.status,
+      Details: r.fields?.Details || ""
+    }));
+
+    const csv =
+      "Category,Offender,Police Report,Status,Details\n" +
+      rows.map(r =>
+        `"${r.Category}","${r.Offender}","${r.PoliceReport}","${r.Status}","${r.Details.replace(/"/g, '""')}"`
+      ).join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "reports.csv";
+    a.click();
+  }
+
+  const filtered = reports.filter(r => {
+    const q = search.toLowerCase();
+    return (
+      (!search ||
+        r.offender?.toLowerCase().includes(q) ||
+        r.fields?.Details?.toLowerCase().includes(q)) &&
+      (!statusFilter || r.status === statusFilter) &&
+      (!categoryFilter || r.categoryId === categoryFilter)
+    );
+  });
 
   return (
-    <Box sx={{ p: 0.25 }}>
-      <Typography variant="h6" sx={{ mb: 0.25, fontSize: "0.9rem" }}>
+    <Box sx={{ p: 1 }}>
+      <Typography variant="h6" sx={{ mb: 1 }}>
         Admin Dashboard
       </Typography>
 
-      <TableContainer component={Paper} sx={{ overflowX: "auto" }}>
-        <Table
+      {/* TOOLBAR */}
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ mb: 1, flexWrap: "wrap", alignItems: "center" }}
+      >
+        <TextField
           size="small"
-          sx={{
-            "& th, & td": {
-              padding: "1px 3px",      // 🔥 EXCEL-LEVEL DENSE
-              fontSize: "0.68rem",
-              lineHeight: 1.15,
-              whiteSpace: "nowrap",
-            },
-          }}
+          placeholder="Search…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          sx={{ minWidth: 200 }}
+        />
+
+        <TextField
+          size="small"
+          select
+          label="Status"
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          sx={{ minWidth: 110 }}
         >
-          <TableHead>
-            <TableRow>
-              <TableCell>Date</TableCell>
-              <TableCell>Category</TableCell>
-              <TableCell>Offender</TableCell>
-              <TableCell>PR #</TableCell>
+          <MenuItem value="">All</MenuItem>
+          <MenuItem value="Pending">Pending</MenuItem>
+          <MenuItem value="Complete">Complete</MenuItem>
+        </TextField>
 
-              {/* DETAILS — MAX SPACE */}
-              <TableCell
-                sx={{
-                  minWidth: 500,
-                  whiteSpace: "normal",
-                }}
-              >
-                Details
-              </TableCell>
+        <TextField
+          size="small"
+          select
+          label="Category"
+          value={categoryFilter}
+          onChange={e => setCategoryFilter(e.target.value)}
+          sx={{ minWidth: 160 }}
+        >
+          <MenuItem value="">All</MenuItem>
+          {Object.entries(categories).map(([id, name]) => (
+            <MenuItem key={id} value={id}>{name}</MenuItem>
+          ))}
+        </TextField>
 
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
+        <Button
+          size="small"
+          startIcon={<DownloadIcon />}
+          onClick={exportCSV}
+        >
+          Export
+        </Button>
+      </Stack>
 
-          <TableBody>
-            {paginated.map(r => (
-              <TableRow key={r.id} hover>
-                <TableCell>
-                  {r.createdAt?.toDate?.().toLocaleDateString()}
-                </TableCell>
-
-                <TableCell>{categoryName(r.categoryId)}</TableCell>
-                <TableCell>{r.offender || "—"}</TableCell>
-                <TableCell>{r.fields?.policeReport || "—"}</TableCell>
-
-                {/* DETAILS CELL */}
-                <TableCell
-                  sx={{
-                    maxWidth: 600,
-                    whiteSpace: "normal",
-                  }}
-                >
-                  <Tooltip title={r.fields?.Details || ""} arrow>
-                    <span
-                      style={{
-                        display: "block",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {r.fields?.Details || "—"}
-                    </span>
-                  </Tooltip>
-                </TableCell>
-
-                <TableCell>
-                  <Chip
-                    size="small"
-                    label={r.status}
-                    color={r.status === "Complete" ? "success" : "warning"}
-                    sx={{
-                      height: 16,
-                      fontSize: "0.6rem",
-                    }}
-                  />
-                </TableCell>
-
-                <TableCell align="right">
-                  <IconButton size="small" onClick={() => setEditing(r)}>
-                    <EditIcon fontSize="inherit" />
-                  </IconButton>
-
-                  <IconButton size="small" onClick={() => toggleStatus(r)}>
-                    <CheckCircleIcon fontSize="inherit" />
-                  </IconButton>
-
-                  <IconButton
-                    size="small"
-                    color="error"
-                    onClick={() => deleteReport(r.id)}
-                  >
-                    <DeleteIcon fontSize="inherit" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-
-            {reports.length === 0 && (
+      {/* TABLE */}
+      <Paper>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
               <TableRow>
-                <TableCell colSpan={7} align="center">
-                  No reports found
-                </TableCell>
+                <TableCell>Category</TableCell>
+                <TableCell>Offender</TableCell>
+                <TableCell>Police Report</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell sx={{ width: "50%" }}>Details</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHead>
 
-        {/* PAGINATION */}
+            <TableBody>
+              {filtered
+                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                .map(r => (
+                  <TableRow key={r.id} hover>
+                    <TableCell>{r.categoryName}</TableCell>
+                    <TableCell>{r.offender || "—"}</TableCell>
+                    <TableCell>{r.fields?.policeReport || "—"}</TableCell>
+                    <TableCell>{r.status}</TableCell>
+
+                    <TableCell>
+                      <Tooltip title={r.fields?.Details || ""} arrow>
+                        <span
+                          style={{
+                            display: "block",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis"
+                          }}
+                        >
+                          {r.fields?.Details || "—"}
+                        </span>
+                      </Tooltip>
+                    </TableCell>
+
+                    <TableCell align="right">
+                      <IconButton size="small" onClick={() => setSelected(r)}>
+                        <EditIcon fontSize="inherit" />
+                      </IconButton>
+
+                      <IconButton size="small" onClick={() => toggleStatus(r)}>
+                        {r.status === "Complete" ? "↺" : "✓"}
+                      </IconButton>
+
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleDelete(r.id)}
+                      >
+                        <DeleteIcon fontSize="inherit" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} align="center">
+                    No reports found
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
         <TablePagination
           component="div"
-          count={reports.length}
+          count={filtered.length}
           page={page}
-          onPageChange={(_, p) => setPage(p)}
+          onPageChange={(e, p) => setPage(p)}
           rowsPerPage={rowsPerPage}
           onRowsPerPageChange={e => {
             setRowsPerPage(parseInt(e.target.value, 10));
             setPage(0);
           }}
-          rowsPerPageOptions={[10, 25, 50, 100]}
-          sx={{
-            "& *": {
-              fontSize: "0.65rem",
-            },
-          }}
+          rowsPerPageOptions={[10, 25, 50]}
         />
-      </TableContainer>
+      </Paper>
 
-      <EditReportModal
-        open={!!editing}
-        report={editing}
-        onClose={() => setEditing(null)}
-        onSave={saveEdit}
-      />
+      {selected && (
+        <EditReportModal
+          open
+          report={selected}
+          onClose={() => setSelected(null)}
+          onSaved={loadData}
+        />
+      )}
     </Box>
   );
 }
