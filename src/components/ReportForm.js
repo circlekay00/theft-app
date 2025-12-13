@@ -35,7 +35,7 @@ export default function ReportForm() {
   const [fieldValues, setFieldValues] = useState({});
   const [selectedSub, setSelectedSub] = useState("");
 
-  const [submitting, setSubmitting] = useState(false); // ✅ NEW
+  const [submitting, setSubmitting] = useState(false); // ✅
 
   const [snack, setSnack] = useState({
     open: false,
@@ -100,7 +100,7 @@ export default function ReportForm() {
     }
 
     try {
-      setSubmitting(true); // ✅ DISABLE BUTTON
+      setSubmitting(true); // ✅ LOCK FORM
 
       await addDoc(collection(db, "reports"), {
         reporterId: user?.uid || null,
@@ -136,7 +136,7 @@ export default function ReportForm() {
         severity: "error",
       });
     } finally {
-      setSubmitting(false); // ✅ RE-ENABLE BUTTON
+      setSubmitting(false); // ✅ UNLOCK FORM
     }
   }
 
@@ -162,6 +162,7 @@ export default function ReportForm() {
         <Stack spacing={isMobile ? 1.5 : 2}>
           <TextField
             select
+            disabled={submitting}
             label="Category"
             value={selectedCatId}
             onChange={(e) => setSelectedCatId(e.target.value)}
@@ -176,10 +177,10 @@ export default function ReportForm() {
 
           <TextField
             select
+            disabled={submitting || !subcategories.length}
             label="Subcategory"
             value={selectedSub}
             onChange={(e) => setSelectedSub(e.target.value)}
-            disabled={!subcategories.length}
             fullWidth
           >
             {subcategories.map((s, i) => (
@@ -191,6 +192,7 @@ export default function ReportForm() {
 
           <TextField
             select
+            disabled={submitting}
             label="Known Offender"
             value={selectedOffender}
             onChange={(e) => setSelectedOffender(e.target.value)}
@@ -207,6 +209,7 @@ export default function ReportForm() {
           {fields.map((f) => (
             <TextField
               key={f.id}
+              disabled={submitting}
               label={f.name}
               value={fieldValues[f.name]}
               onChange={(e) => updateField(f.name, e.target.value)}
@@ -221,7 +224,7 @@ export default function ReportForm() {
             size={isMobile ? "large" : "medium"}
             fullWidth
             onClick={submitReport}
-            disabled={submitting}   // ✅ DISABLED WHILE SAVING
+            disabled={submitting}
             sx={{ mt: 1 }}
           >
             {submitting ? "Submitting…" : "Submit Report"}
@@ -229,7 +232,6 @@ export default function ReportForm() {
         </Stack>
       </Paper>
 
-      {/* ✅ SNACKBAR FIXED */}
       <Snackbar
         key={snack.message}
         open={snack.open}
