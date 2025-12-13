@@ -157,7 +157,7 @@ export default function AdminDashboard() {
         r.categoryName,
         r.status,
         r.offender || "",
-        r.fields?.policeReport || "",
+        r.fields?.policeReport || r.policeReport || "",
         r.fields?.Details || "",
         r.adminComment || "",
       ]),
@@ -264,7 +264,8 @@ export default function AdminDashboard() {
                       sx={{ "& td": { py: 0.6, fontSize: "0.75rem" } }}
                     >
                       <TableCell>
-                        {r.createdAt?.toDate?.().toLocaleDateString()}
+                        {r.createdAt?.toDate?.().toLocaleString()}
+
                       </TableCell>
 
                       <TableCell>{r.categoryName}</TableCell>
@@ -279,7 +280,7 @@ export default function AdminDashboard() {
                       </TableCell>
 
                       <TableCell>{r.offender || "—"}</TableCell>
-                      <TableCell>{r.fields?.policeReport || "—"}</TableCell>
+                      <TableCell>{r.fields?.policeReport || r.policeReport || "—"}</TableCell>
 
                       <TableCell>
                         <Tooltip title={r.fields?.Details || ""} arrow>
