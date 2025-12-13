@@ -3,263 +3,324 @@ import {
   Box,
   Typography,
   TextField,
+  InputAdornment,
+  CircularProgress,
+  Button,
   MenuItem,
-  IconButton,
+  Paper,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   TablePagination,
-  Stack,
   Tooltip,
-  Button
 } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import DownloadIcon from "@mui/icons-material/Download";
+import SearchIcon from "@mui/icons-material/Search";
 
-import { db } from "../firebase";
-import {
-  collection,
-  getDocs,
-  deleteDoc,
-  doc,
-  updateDoc
-} from "firebase/firestore";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 import EditReportModal from "./EditReportModal";
 
+import {
+  collection,
+  getDocs,
+  doc,
+  updateDoc,
+  deleteDoc,
+  getDoc,
+  query,
+  orderBy,
+} from "firebase/firestore";
+import { db } from "../firebase";
+
 export default function AdminDashboard() {
   const [reports, setReports] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [filteredReports, setFilteredReports] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
 
+  const [editOpen, setEditOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState(null);
+
+  const [categories, setCategories] = useState([]);
+
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(15);
 
   useEffect(() => {
-    loadData();
+    const load = async () => {
+      setLoading(true);
+      try {
+        const catSnap = await getDocs(collection(db, "categories"));
+        setCategories(catSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        const q = query(collection(db, "reports"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+
+        const out = [];
+        for (const d of snap.docs) {
+          const data = d.data();
+          let categoryName = "";
+
+          if (data.categoryId) {
+            const catDoc = await getDoc(doc(db, "categories", data.categoryId));
+            if (catDoc.exists()) categoryName = catDoc.data().name || "";
+          }
+
+          out.push({ id: d.id, ...data, categoryName });
+        }
+
+        setReports(out);
+        setFilteredReports(out);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
   }, []);
 
-  async function loadData() {
-    const catSnap = await getDocs(collection(db, "categories"));
-    const catMap = {};
-    catSnap.forEach(d => (catMap[d.id] = d.data().name));
-    setCategories(catMap);
+  useEffect(() => {
+    const txt = search.toLowerCase().trim();
 
-    const repSnap = await getDocs(collection(db, "reports"));
-    const list = repSnap.docs.map(d => ({
-      id: d.id,
-      ...d.data(),
-      categoryName: catMap[d.data().categoryId] || "—"
-    }));
+    const filtered = reports.filter(r => {
+      if (statusFilter && r.status !== statusFilter) return false;
+      if (categoryFilter && r.categoryId !== categoryFilter) return false;
+      if (!txt) return true;
 
-    setReports(list);
-  }
+      const combined = `
+        ${JSON.stringify(r)}
+        ${JSON.stringify(r.fields || {})}
+      `.toLowerCase();
 
-  async function handleDelete(id) {
-    if (!window.confirm("Delete this report?")) return;
-    await deleteDoc(doc(db, "reports", id));
-    loadData();
-  }
-
-  async function toggleStatus(r) {
-    await updateDoc(doc(db, "reports", r.id), {
-      status: r.status === "Complete" ? "Pending" : "Complete"
+      return combined.includes(txt);
     });
-    loadData();
-  }
 
-  function exportCSV() {
-    const rows = filtered.map(r => ({
-      Category: r.categoryName,
-      Offender: r.offender || "",
-      PoliceReport: r.fields?.policeReport || "",
-      Status: r.status,
-      Details: r.fields?.Details || ""
-    }));
+    setFilteredReports(filtered);
+    setPage(0);
+  }, [search, statusFilter, categoryFilter, reports]);
 
-    const csv =
-      "Category,Offender,Police Report,Status,Details\n" +
-      rows.map(r =>
-        `"${r.Category}","${r.Offender}","${r.PoliceReport}","${r.Status}","${r.Details.replace(/"/g, '""')}"`
-      ).join("\n");
+  const handleSaveEditedReport = async (updatedReport) => {
+    const ref = doc(db, "reports", updatedReport.id);
 
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "reports.csv";
-    a.click();
-  }
+    await updateDoc(ref, {
+      status: updatedReport.status,
+      adminComment: updatedReport.adminComment || "",
+      fields: { ...updatedReport.fields },
+      updatedAt: new Date(),
+    });
 
-  const filtered = reports.filter(r => {
-    const q = search.toLowerCase();
-    return (
-      (!search ||
-        r.offender?.toLowerCase().includes(q) ||
-        r.fields?.Details?.toLowerCase().includes(q)) &&
-      (!statusFilter || r.status === statusFilter) &&
-      (!categoryFilter || r.categoryId === categoryFilter)
+    setReports(prev =>
+      prev.map(r => r.id === updatedReport.id ? updatedReport : r)
     );
-  });
+    setFilteredReports(prev =>
+      prev.map(r => r.id === updatedReport.id ? updatedReport : r)
+    );
+
+    setEditOpen(false);
+    setSelectedReport(null);
+  };
+
+  const exportPDF = () => {
+    const docu = new jsPDF("l", "pt", "a4");
+
+    docu.text("Incident Reports", 40, 40);
+
+    autoTable(docu, {
+      startY: 70,
+      head: [[
+        "Date",
+        "Category",
+        "Status",
+        "Offender",
+        "Police",
+        "Details",
+        "Admin Comment"
+      ]],
+      body: filteredReports.map(r => [
+        r.createdAt?.toDate?.().toLocaleString() || "",
+        r.categoryName,
+        r.status,
+        r.fields?.offender || "",
+        r.fields?.policeReport || "",
+        r.fields?.Details || "",
+        r.adminComment || "",
+      ]),
+      styles: { fontSize: 8 },
+    });
+
+    docu.save("reports.pdf");
+  };
 
   return (
-    <Box sx={{ p: 1 }}>
-      <Typography variant="h6" sx={{ mb: 1 }}>
-        Admin Dashboard
-      </Typography>
-
-      {/* TOOLBAR */}
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{ mb: 1, flexWrap: "wrap", alignItems: "center" }}
-      >
-        <TextField
-          size="small"
-          placeholder="Search…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          sx={{ minWidth: 200 }}
-        />
-
-        <TextField
-          size="small"
-          select
-          label="Status"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          sx={{ minWidth: 110 }}
-        >
-          <MenuItem value="">All</MenuItem>
-          <MenuItem value="Pending">Pending</MenuItem>
-          <MenuItem value="Complete">Complete</MenuItem>
-        </TextField>
-
-        <TextField
-          size="small"
-          select
-          label="Category"
-          value={categoryFilter}
-          onChange={e => setCategoryFilter(e.target.value)}
-          sx={{ minWidth: 160 }}
-        >
-          <MenuItem value="">All</MenuItem>
-          {Object.entries(categories).map(([id, name]) => (
-            <MenuItem key={id} value={id}>{name}</MenuItem>
-          ))}
-        </TextField>
-
-        <Button
-          size="small"
-          startIcon={<DownloadIcon />}
-          onClick={exportCSV}
-        >
-          Export
-        </Button>
+    <Box sx={{ p: 1.5, minHeight: "100vh" }}>
+      <Stack direction="row" justifyContent="space-between" mb={1}>
+        <Typography variant="h6" fontWeight={600}>
+          Admin Dashboard
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {filteredReports.length} reports
+        </Typography>
       </Stack>
 
-      {/* TABLE */}
-      <Paper>
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Category</TableCell>
-                <TableCell>Offender</TableCell>
-                <TableCell>Police Report</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell sx={{ width: "50%" }}>Details</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
+      <Paper sx={{ p: 1, mb: 1, borderRadius: 2 }}>
+        <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+          <TextField
+            size="small"
+            placeholder="Search…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            sx={{ minWidth: 220 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+              sx: { fontSize: "0.75rem" }
+            }}
+          />
 
-            <TableBody>
-              {filtered
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map(r => (
-                  <TableRow key={r.id} hover>
-                    <TableCell>{r.categoryName}</TableCell>
-                    <TableCell>{r.offender || "—"}</TableCell>
-                    <TableCell>{r.fields?.policeReport || "—"}</TableCell>
-                    <TableCell>{r.status}</TableCell>
+          <TextField
+            size="small"
+            select
+            label="Status"
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            sx={{ minWidth: 110 }}
+          >
+            <MenuItem value="">All</MenuItem>
+            <MenuItem value="Pending">Pending</MenuItem>
+            <MenuItem value="Complete">Complete</MenuItem>
+          </TextField>
 
-                    <TableCell>
-                      <Tooltip title={r.fields?.Details || ""} arrow>
-                        <span
-                          style={{
-                            display: "block",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis"
-                          }}
-                        >
-                          {r.fields?.Details || "—"}
-                        </span>
-                      </Tooltip>
-                    </TableCell>
+          <TextField
+            size="small"
+            select
+            label="Category"
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            sx={{ minWidth: 160 }}
+          >
+            <MenuItem value="">All</MenuItem>
+            {categories.map(c => (
+              <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+            ))}
+          </TextField>
 
-                    <TableCell align="right">
-                      <IconButton size="small" onClick={() => setSelected(r)}>
-                        <EditIcon fontSize="inherit" />
-                      </IconButton>
-
-                      <IconButton size="small" onClick={() => toggleStatus(r)}>
-                        {r.status === "Complete" ? "↺" : "✓"}
-                      </IconButton>
-
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDelete(r.id)}
-                      >
-                        <DeleteIcon fontSize="inherit" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    No reports found
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <TablePagination
-          component="div"
-          count={filtered.length}
-          page={page}
-          onPageChange={(e, p) => setPage(p)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={e => {
-            setRowsPerPage(parseInt(e.target.value, 10));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[10, 25, 50]}
-        />
+          <Button
+            variant="contained"
+            size="small"
+            onClick={exportPDF}
+            sx={{ ml: "auto" }}
+          >
+            Export PDF
+          </Button>
+        </Stack>
       </Paper>
 
-      {selected && (
-        <EditReportModal
-          open
-          report={selected}
-          onClose={() => setSelected(null)}
-          onSaved={loadData}
-        />
+      {loading ? (
+        <CircularProgress size={24} />
+      ) : (
+        <Paper sx={{ borderRadius: 2 }}>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: "rgba(255,255,255,0.04)" }}>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Category</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Offender</TableCell>
+                  <TableCell>Police</TableCell>
+                  <TableCell sx={{ width: "40%" }}>Details</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {filteredReports
+                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                  .map(r => (
+                    <TableRow
+                      key={r.id}
+                      hover
+                      sx={{ "& td": { py: 0.6, fontSize: "0.75rem" } }}
+                    >
+                      <TableCell>
+                        {r.createdAt?.toDate?.().toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>{r.categoryName}</TableCell>
+                      <TableCell>{r.status}</TableCell>
+                      <TableCell>{r.offender || "—"}</TableCell>
+
+                      <TableCell>{r.fields?.policeReport || "—"}</TableCell>
+
+                      <TableCell>
+                        <Tooltip title={r.fields?.Details || ""} arrow>
+                          <span
+                            style={{
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              display: "block",
+                              maxWidth: "100%"
+                            }}
+                          >
+                            {r.fields?.Details || "—"}
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+
+                      <TableCell>
+                        <Button size="small" onClick={() => {
+                          setSelectedReport(r);
+                          setEditOpen(true);
+                        }}>
+                          Edit
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <TablePagination
+            component="div"
+            count={filteredReports.length}
+            page={page}
+            rowsPerPage={rowsPerPage}
+            onPageChange={(e, p) => setPage(p)}
+            onRowsPerPageChange={e => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
+            rowsPerPageOptions={[10, 15, 25, 50]}
+            sx={{
+              "& .MuiTablePagination-toolbar": {
+                minHeight: 40,
+                fontSize: "0.75rem"
+              }
+            }}
+          />
+        </Paper>
       )}
+
+      <EditReportModal
+        open={editOpen}
+        report={selectedReport}
+        onClose={() => setEditOpen(false)}
+        onSave={handleSaveEditedReport}
+      />
     </Box>
   );
 }
