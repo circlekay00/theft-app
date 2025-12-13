@@ -1,96 +1,67 @@
+// src/components/ReportCard.js
 import React from "react";
 import {
   Card,
   CardContent,
   Typography,
-  Box,
   Button,
-  IconButton,
-  Divider,
+  Stack,
 } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import NoteAltIcon from "@mui/icons-material/NoteAlt";
 
-export default function ReportCard({
-  report,
-  onEdit,
-  onDelete,
-  onToggleStatus,
-}) {
+export default function ReportCard({ report, onEdit, onDelete, onToggleStatus }) {
   const f = report.fields || {};
 
   return (
-    <Card sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <CardContent sx={{ flexGrow: 1 }}>
-        {/* Header */}
+    <Card sx={{ height: "100%" }}>
+      <CardContent>
         <Typography variant="subtitle2" color="text.secondary">
-          {report.categoryName || "Uncategorized"}
-          {report.subcategory ? ` / ${report.subcategory}` : ""}
+          {report.createdAt?.toDate?.().toLocaleString()}
         </Typography>
 
-        <Typography variant="h6" sx={{ mt: 0.5 }}>
-          Offender: {f.offender || report.offender || "N/A"}
+        <Typography variant="h6" gutterBottom>
+          {report.categoryName} — {report.subcategory}
         </Typography>
 
         <Typography variant="body2">
-          Store: {f["Store Number"] || report["Store Number"] || "N/A"}
+          <strong>Offender:</strong> {report.offender || "—"}
+        </Typography>
+
+        <Typography variant="body2">
+          <strong>Store #:</strong> {f["Store Number"] || "—"}
+        </Typography>
+
+        <Typography variant="body2">
+          <strong>Police Report:</strong> {f.policeReport || "—"}
         </Typography>
 
         <Typography variant="body2" sx={{ mt: 1 }}>
-          {f.Details || report.Details || "No details"}
+          <strong>Details:</strong> {f.Details || "—"}
         </Typography>
 
         {report.adminComment && (
-          <>
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="caption" color="text.secondary">
-              Admin Comment:
-            </Typography>
-            <Typography variant="body2">
-              {report.adminComment}
-            </Typography>
-          </>
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            <strong>Admin:</strong> {report.adminComment}
+          </Typography>
         )}
-      </CardContent>
 
-      {/* Actions */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          p: 1,
-          gap: 0.5,
-        }}
-      >
-        <Box>
-          <IconButton size="small" onClick={() => onEdit(report)}>
-            <EditIcon fontSize="small" />
-          </IconButton>
+        <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+          <Button size="small" onClick={onEdit}>
+            Edit
+          </Button>
 
-          <IconButton size="small" onClick={onDelete}>
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-
-          {/* Admin Comment Icon */}
-          <IconButton
+          <Button
             size="small"
-            title="Admin Comment"
-            onClick={() => onEdit(report)}
+            onClick={onToggleStatus}
+            color={report.status === "Complete" ? "warning" : "success"}
           >
-            <NoteAltIcon fontSize="small" />
-          </IconButton>
-        </Box>
+            {report.status === "Complete" ? "Mark Pending" : "Mark Complete"}
+          </Button>
 
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={onToggleStatus}
-        >
-          {report.status === "Complete" ? "Complete" : "Pending"}
-        </Button>
-      </Box>
+          <Button size="small" color="error" onClick={onDelete}>
+            Delete
+          </Button>
+        </Stack>
+      </CardContent>
     </Card>
   );
 }

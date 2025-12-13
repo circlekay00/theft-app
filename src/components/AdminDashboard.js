@@ -71,7 +71,12 @@ export default function AdminDashboard() {
             if (catDoc.exists()) categoryName = catDoc.data().name || "";
           }
 
-          out.push({ id: d.id, ...data, categoryName });
+          out.push({
+            id: d.id,
+            ...data,
+            categoryName,
+            offender: data.offender || "", // 🔒 GUARANTEE
+          });
         }
 
         setReports(out);
@@ -89,7 +94,6 @@ export default function AdminDashboard() {
   // ---------------- SEARCH + FILTER ----------------
   useEffect(() => {
     const txt = search.toLowerCase().trim();
-
     const from = dateFrom ? new Date(dateFrom + "T00:00:00") : null;
     const to = dateTo ? new Date(dateTo + "T23:59:59") : null;
 
@@ -98,7 +102,7 @@ export default function AdminDashboard() {
       if (categoryFilter && r.categoryId !== categoryFilter) return false;
 
       if (from || to) {
-        const created = r.createdAt?.toDate ? r.createdAt.toDate() : null;
+        const created = r.createdAt?.toDate?.();
         if (!created) return false;
         if (from && created < from) return false;
         if (to && created > to) return false;
@@ -106,11 +110,10 @@ export default function AdminDashboard() {
 
       if (!txt) return true;
 
-      const f = r.fields || {};
       const combined = `
-  ${JSON.stringify(r)}
-`.toLowerCase();
-
+        ${JSON.stringify(r)}
+        ${JSON.stringify(r.fields || {})}
+      `.toLowerCase();
 
       return combined.includes(txt);
     });
@@ -134,23 +137,52 @@ export default function AdminDashboard() {
   const handleToggleStatus = async report => {
     const newStatus = report.status === "Complete" ? "Pending" : "Complete";
     await updateDoc(doc(db, "reports", report.id), { status: newStatus });
-    setReports(p => p.map(r => r.id === report.id ? { ...r, status: newStatus } : r));
-    setFilteredReports(p => p.map(r => r.id === report.id ? { ...r, status: newStatus } : r));
+
+    setReports(p =>
+      p.map(r => r.id === report.id ? { ...r, status: newStatus } : r)
+    );
+    setFilteredReports(p =>
+      p.map(r => r.id === report.id ? { ...r, status: newStatus } : r)
+    );
   };
 
-  const handleSaveEditedReport = async (original, updated) => {
-    const ref = doc(db, "reports", original.id);
+  // ---------------- SAVE EDIT ----------------
+  const handleSaveEditedReport = async (updatedReport) => {
+    const ref = doc(db, "reports", updatedReport.id);
 
-    const updates = {
-      adminComment: updated.adminComment ?? original.adminComment,
-      status: updated.status ?? original.status,
+    await updateDoc(ref, {
+      status: updatedReport.status,
+      adminComment: updatedReport.adminComment || "",
+      offender: updatedReport.offender || "",
+      categoryId: updatedReport.categoryId,
+      subcategory: updatedReport.subcategory,
+      fields: { ...updatedReport.fields },
       updatedAt: new Date(),
-    };
+    });
 
-    await updateDoc(ref, updates);
+    setReports(prev =>
+      prev.map(r =>
+        r.id === updatedReport.id
+          ? {
+              ...r,
+              ...updatedReport,
+              offender: updatedReport.offender ?? r.offender,
+            }
+          : r
+      )
+    );
 
-    setReports(p => p.map(r => r.id === original.id ? { ...r, ...updates } : r));
-    setFilteredReports(p => p.map(r => r.id === original.id ? { ...r, ...updates } : r));
+    setFilteredReports(prev =>
+      prev.map(r =>
+        r.id === updatedReport.id
+          ? {
+              ...r,
+              ...updatedReport,
+              offender: updatedReport.offender ?? r.offender,
+            }
+          : r
+      )
+    );
 
     setEditOpen(false);
     setSelectedReport(null);
@@ -158,13 +190,9 @@ export default function AdminDashboard() {
 
   // ---------------- PDF EXPORT ----------------
   const exportPDF = () => {
-    const doc = new jsPDF("l", "pt", "a4");
-
-    const d = new Date();
-    const name = `CK_AZ${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getFullYear()).slice(2)}.pdf`;
-
-    doc.setFontSize(14);
-    doc.text("Incident Reports", 40, 40);
+    const pdf = new jsPDF("l", "pt", "a4");
+    pdf.setFontSize(14);
+    pdf.text("Incident Reports", 40, 40);
 
     const rows = filteredReports.map(r => {
       const f = r.fields || {};
@@ -174,7 +202,7 @@ export default function AdminDashboard() {
         r.categoryName,
         r.subcategory,
         r.status,
-        f.offender || "",
+        r.offender,
         f["Store Number"] || "",
         f.Details || "",
         f.policeReport || "",
@@ -182,34 +210,28 @@ export default function AdminDashboard() {
       ];
     });
 
-    autoTable(doc, {
+    autoTable(pdf, {
       startY: 70,
       head: [[
         "ID","Created","Category","Subcat","Status",
-        "Offender","Store","Details","Police","Admin Comment"
+        "Offender","Store","Details","Police","Admin"
       ]],
       body: rows,
       styles: { fontSize: 8, cellPadding: 4 },
-      headStyles: { fillColor: [30,30,30], textColor: 255 },
-      columnStyles: {
-        7: { cellWidth: 180 },
-        9: { cellWidth: 150 },
-      },
-      pageBreak: "auto",
     });
 
-    doc.save(name);
+    pdf.save("reports.pdf");
   };
 
   // ---------------- UI ----------------
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 2 }}>
       <Typography variant="h5" mb={2}>Admin Dashboard</Typography>
 
-      <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mb: 2 }}>
+      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
         <TextField
           size="small"
-          placeholder="Search reports…"
+          placeholder="Search…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           InputProps={{
@@ -221,7 +243,7 @@ export default function AdminDashboard() {
           }}
         />
 
-        <FormControl size="small" sx={{ minWidth: 140 }}>
+        <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel>Status</InputLabel>
           <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <MenuItem value="">All</MenuItem>
@@ -230,7 +252,7 @@ export default function AdminDashboard() {
           </Select>
         </FormControl>
 
-        <FormControl size="small" sx={{ minWidth: 180 }}>
+        <FormControl size="small" sx={{ minWidth: 140 }}>
           <InputLabel>Category</InputLabel>
           <Select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
             <MenuItem value="">All</MenuItem>
@@ -239,26 +261,6 @@ export default function AdminDashboard() {
             ))}
           </Select>
         </FormControl>
-
-        <TextField
-          size="small"
-          sx={{ minWidth: 140 }}
-          type="date"
-          label="From"
-          InputLabelProps={{ shrink: true }}
-          value={dateFrom}
-          onChange={e => setDateFrom(e.target.value)}
-        />
-
-        <TextField
-          size="small"
-          sx={{ minWidth: 140 }}
-          type="date"
-          label="To"
-          InputLabelProps={{ shrink: true }}
-          value={dateTo}
-          onChange={e => setDateTo(e.target.value)}
-        />
 
         <Button variant="contained" size="small" onClick={exportPDF}>
           Export PDF

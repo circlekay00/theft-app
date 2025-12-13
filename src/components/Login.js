@@ -1,3 +1,4 @@
+// src/components/Login.js
 import React, { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../firebase";
@@ -8,7 +9,7 @@ import { Box, Button, TextField, Typography, Paper } from "@mui/material";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [adminCode, setAdminCode] = useState(""); // NEW
+  const [adminCode, setAdminCode] = useState("");
   const navigate = useNavigate();
 
   const login = async () => {
@@ -17,26 +18,28 @@ export default function Login() {
       const uid = res.user.uid;
 
       const snap = await getDoc(doc(db, "users", uid));
-      const data = snap.data();
+      const data = snap.exists() ? snap.data() : {};
 
       let role = data?.role || "user";
-      let name = data?.name || "Unknown User";
+      let name = data?.name || email;
 
-      // SPECIAL ADMIN LOGIN CODE
+      // ADMIN OVERRIDE
       if (adminCode === "SUPERADMIN123") {
         role = "admin";
         name = name || "Admin";
       }
 
-      // Store user data
+      // 🔑 CRITICAL: persist user session
       localStorage.setItem(
         "userData",
         JSON.stringify({ uid, role, name })
       );
 
-      // Redirect
-      if (role === "admin") navigate("/admin", { replace: true });
-      else navigate("/", { replace: true });
+      if (role === "admin") {
+        navigate("/admin", { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
 
     } catch (err) {
       alert(err.message);
@@ -65,7 +68,6 @@ export default function Login() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        {/* Special Admin Code */}
         <TextField
           label="Admin Code (optional)"
           fullWidth
@@ -77,15 +79,7 @@ export default function Login() {
           Login
         </Button>
 
-        <Button
-          component={Link}
-          to="/register"
-          variant="text"
-          fullWidth
-          sx={{ mt: 1 }}
-        >
-          Create an account
-        </Button>
+      
       </Paper>
     </Box>
   );

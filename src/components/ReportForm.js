@@ -1,13 +1,16 @@
 // src/components/ReportForm.js
 import { useEffect, useState } from "react";
 import {
-  Box,
   Typography,
   TextField,
   Button,
   MenuItem,
   Paper,
   Stack,
+  Snackbar,
+  Alert,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import { db } from "../firebase";
 import {
@@ -18,6 +21,9 @@ import {
 } from "firebase/firestore";
 
 export default function ReportForm() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [categories, setCategories] = useState([]);
   const [selectedCatId, setSelectedCatId] = useState("");
   const [subcategories, setSubcategories] = useState([]);
@@ -29,8 +35,15 @@ export default function ReportForm() {
   const [fieldValues, setFieldValues] = useState({});
   const [selectedSub, setSelectedSub] = useState("");
 
-  const user = JSON.parse(localStorage.getItem("userData"));
+  const [snack, setSnack] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
 
+  const user = JSON.parse(localStorage.getItem("userData") || "null");
+
+  // ---------------- LOAD DATA ----------------
   useEffect(() => {
     loadCategories();
     loadOffenders();
@@ -39,12 +52,13 @@ export default function ReportForm() {
 
   async function loadCategories() {
     const snap = await getDocs(collection(db, "categories"));
-    const list = snap.docs.map((d) => ({
-      id: d.id,
-      name: d.data().name,
-      subcategories: d.data().subcategories || [],
-    }));
-    setCategories(list);
+    setCategories(
+      snap.docs.map((d) => ({
+        id: d.id,
+        name: d.data().name,
+        subcategories: d.data().subcategories || [],
+      }))
+    );
   }
 
   async function loadOffenders() {
@@ -54,11 +68,7 @@ export default function ReportForm() {
 
   async function loadFields() {
     const snap = await getDocs(collection(db, "fields"));
-    const list = snap.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    }));
-
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     setFields(list);
 
     const initial = {};
@@ -78,100 +88,156 @@ export default function ReportForm() {
 
   async function submitReport() {
     if (!selectedCatId || !selectedSub) {
-      alert("Select category & subcategory");
+      setSnack({
+        open: true,
+        message: "Please select category and subcategory",
+        severity: "warning",
+      });
       return;
     }
 
-    await addDoc(collection(db, "reports"), {
-      reporterId: user.uid,
-      reporterName: user.name,
-      categoryId: selectedCatId, // ← IMPORTANT
-      subcategory: selectedSub,
-      offender: selectedOffender || "",
-      fields: fieldValues,
-      status: "Pending",
-      createdAt: serverTimestamp(),
-    });
+    try {
+      await addDoc(collection(db, "reports"), {
+        reporterId: user?.uid || null,
+        reporterName: user?.name || "Guest",
+        categoryId: selectedCatId,
+        subcategory: selectedSub,
+        offender: selectedOffender || "",
+        fields: fieldValues,
+        status: "Pending",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
-    alert("Report submitted!");
+      setSnack({
+        open: true,
+        message: "Report submitted successfully",
+        severity: "success",
+      });
 
-    setSelectedCatId("");
-    setSelectedSub("");
-    setSelectedOffender("");
+      setSelectedCatId("");
+      setSelectedSub("");
+      setSelectedOffender("");
 
-    const reset = {};
-    fields.forEach((f) => (reset[f.name] = ""));
-    setFieldValues(reset);
+      const reset = {};
+      fields.forEach((f) => (reset[f.name] = ""));
+      setFieldValues(reset);
+
+    } catch (err) {
+      console.error(err);
+      setSnack({
+        open: true,
+        message: "Failed to submit report",
+        severity: "error",
+      });
+    }
   }
 
   return (
-    <Paper sx={{ p: 3, maxWidth: 600, mx: "auto", mt: 3 }}>
-      <Typography variant="h5" sx={{ mb: 2 }}>
-        Submit Report
-      </Typography>
-
-      <Stack spacing={2}>
-
-        <TextField
-          select
-          label="Category"
-          value={selectedCatId}
-          onChange={(e) => setSelectedCatId(e.target.value)}
-          fullWidth
+    <>
+      <Paper
+        elevation={isMobile ? 0 : 3}
+        sx={{
+          p: isMobile ? 2 : 3,
+          maxWidth: 600,
+          mx: "auto",
+          mt: isMobile ? 1 : 3,
+          borderRadius: isMobile ? 0 : 2,
+        }}
+      >
+        <Typography
+          variant={isMobile ? "h6" : "h5"}
+          sx={{ mb: 2, textAlign: "center" }}
         >
-          {categories.map((c) => (
-            <MenuItem key={c.id} value={c.id}>
-              {c.name}
-            </MenuItem>
-          ))}
-        </TextField>
-
-        <TextField
-          select
-          label="Subcategory"
-          value={selectedSub}
-          onChange={(e) => setSelectedSub(e.target.value)}
-          disabled={subcategories.length === 0}
-          fullWidth
-        >
-          {subcategories.map((s, i) => (
-            <MenuItem key={i} value={s}>
-              {s}
-            </MenuItem>
-          ))}
-        </TextField>
-
-        <TextField
-          select
-          label="Known Offender"
-          value={selectedOffender}
-          onChange={(e) => setSelectedOffender(e.target.value)}
-          fullWidth
-        >
-          <MenuItem value="">None</MenuItem>
-          {offenders.map((o) => (
-            <MenuItem key={o.id} value={o.name}>
-              {o.name}
-            </MenuItem>
-          ))}
-        </TextField>
-
-        {fields.map((f) => (
-          <TextField
-            key={f.id}
-            label={f.name}
-            value={fieldValues[f.name]}
-            onChange={(e) => updateField(f.name, e.target.value)}
-            fullWidth
-            multiline={f.type === "textarea"}
-            rows={f.type === "textarea" ? 3 : 1}
-          />
-        ))}
-
-        <Button variant="contained" onClick={submitReport}>
           Submit Report
-        </Button>
-      </Stack>
-    </Paper>
+        </Typography>
+
+        <Stack spacing={isMobile ? 1.5 : 2}>
+          <TextField
+            select
+            label="Category"
+            value={selectedCatId}
+            onChange={(e) => setSelectedCatId(e.target.value)}
+            fullWidth
+          >
+            {categories.map((c) => (
+              <MenuItem key={c.id} value={c.id}>
+                {c.name}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            label="Subcategory"
+            value={selectedSub}
+            onChange={(e) => setSelectedSub(e.target.value)}
+            disabled={!subcategories.length}
+            fullWidth
+          >
+            {subcategories.map((s, i) => (
+              <MenuItem key={i} value={s}>
+                {s}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            label="Known Offender"
+            value={selectedOffender}
+            onChange={(e) => setSelectedOffender(e.target.value)}
+            fullWidth
+          >
+            <MenuItem value="">None</MenuItem>
+            {offenders.map((o) => (
+              <MenuItem key={o.id} value={o.name}>
+                {o.name}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          {fields.map((f) => (
+            <TextField
+              key={f.id}
+              label={f.name}
+              value={fieldValues[f.name]}
+              onChange={(e) => updateField(f.name, e.target.value)}
+              fullWidth
+              multiline={f.type === "textarea"}
+              rows={f.type === "textarea" ? 3 : 1}
+            />
+          ))}
+
+          <Button
+            variant="contained"
+            size={isMobile ? "large" : "medium"}
+            fullWidth
+            onClick={submitReport}
+            sx={{ mt: 1 }}
+          >
+            Submit Report
+          </Button>
+        </Stack>
+      </Paper>
+
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={4000}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "center",
+        }}
+      >
+        <Alert
+          onClose={() => setSnack((s) => ({ ...s, open: false }))}
+          severity={snack.severity}
+          sx={{ width: "100%" }}
+        >
+          {snack.message}
+        </Alert>
+      </Snackbar>
+    </>
   );
 }

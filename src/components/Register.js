@@ -1,3 +1,4 @@
+// src/components/Register.js
 import React, { useState } from "react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../firebase";
@@ -15,10 +16,24 @@ export default function Register() {
       const res = await createUserWithEmailAndPassword(auth, email, password);
       const uid = res.user.uid;
 
-      // save default user role
-      await setDoc(doc(db, "users", uid), { role: "user" });
+      // Save user record in Firestore
+      await setDoc(doc(db, "users", uid), {
+        role: "user",
+        name: email,
+        createdAt: new Date(),
+      });
 
-      navigate("/dashboard", { replace: true });
+      // 🔑 IMPORTANT: store userData for app usage
+      localStorage.setItem(
+        "userData",
+        JSON.stringify({
+          uid,
+          role: "user",
+          name: email,
+        })
+      );
+
+      navigate("/", { replace: true });
     } catch (err) {
       alert(err.message);
     }
