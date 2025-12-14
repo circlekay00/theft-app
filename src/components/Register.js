@@ -1,78 +1,137 @@
 // src/components/Register.js
-import React, { useState } from "react";
+import { useState } from "react";
+import {
+  Box,
+  Paper,
+  TextField,
+  Button,
+  Typography,
+  Stack,
+  Alert,
+} from "@mui/material";
 import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { doc, setDoc } from "firebase/firestore";
-import { useNavigate, Link } from "react-router-dom";
-import { Box, Paper, Typography, TextField, Button } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 
 export default function Register() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  const register = async () => {
-    try {
-      const res = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = res.user.uid;
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [storeNumber, setStoreNumber] = useState("");
 
-      // Save user record in Firestore
-      await setDoc(doc(db, "users", uid), {
-        role: "user",
-        name: email,
-        createdAt: new Date(),
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleRegister = async () => {
+    setError("");
+
+    if (!name || !email || !password || !storeNumber) {
+      setError("All fields are required");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // 1️⃣ Create auth user
+      const cred = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
+      const user = cred.user;
+
+      // 2️⃣ Create Firestore user profile
+      await setDoc(doc(db, "users", user.uid), {
+        name,
+        email,
+        storeNumber: storeNumber.trim(),
+        role: "admin", // 🔒 ALWAYS admin
+        createdAt: serverTimestamp(),
       });
 
-      // 🔑 IMPORTANT: store userData for app usage
+      // 3️⃣ Save minimal session info
       localStorage.setItem(
         "userData",
         JSON.stringify({
-          uid,
-          role: "user",
-          name: email,
+          uid: user.uid,
+          name,
+          email,
+          role: "admin",
+          storeNumber: storeNumber.trim(),
         })
       );
 
-      navigate("/", { replace: true });
+      navigate("/admin");
     } catch (err) {
-      alert(err.message);
+      console.error(err);
+      setError(err.message || "Registration failed");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <Box sx={{ p: 3, maxWidth: 400, mx: "auto" }}>
-      <Paper sx={{ p: 4 }}>
-        <Typography variant="h5" align="center" sx={{ mb: 3 }}>
+    <Box sx={{ mt: 6, display: "flex", justifyContent: "center" }}>
+      <Paper sx={{ p: 3, width: 380 }}>
+        <Typography variant="h6" mb={2} align="center">
           Register
         </Typography>
 
-        <TextField
-          label="Email"
-          fullWidth
-          sx={{ mb: 2 }}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <Stack spacing={2}>
+          {error && <Alert severity="error">{error}</Alert>}
 
-        <TextField
-          label="Password"
-          type="password"
-          fullWidth
-          sx={{ mb: 3 }}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+          <TextField
+            label="Full Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            fullWidth
+          />
 
-        <Button variant="contained" fullWidth onClick={register}>
-          Register
-        </Button>
+          <TextField
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            fullWidth
+          />
 
-        <Button
-          component={Link}
-          to="/login"
-          fullWidth
-          sx={{ mt: 2 }}
-        >
-          Already have an account? Login
-        </Button>
+          <TextField
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            fullWidth
+          />
+
+          <TextField
+            label="Store Number"
+            value={storeNumber}
+            onChange={(e) => setStoreNumber(e.target.value)}
+            fullWidth
+            helperText="You will only see reports for this store"
+          />
+
+          <Button
+            variant="contained"
+            onClick={handleRegister}
+            disabled={loading}
+            fullWidth
+          >
+            {loading ? "Creating Account..." : "Register"}
+          </Button>
+
+          <Button
+            size="small"
+            onClick={() => navigate("/login")}
+          >
+            Already have an account? Login
+          </Button>
+        </Stack>
       </Paper>
     </Box>
   );

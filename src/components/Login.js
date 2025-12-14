@@ -1,85 +1,108 @@
-// src/components/Login.js
-import React, { useState } from "react";
+import { useState } from "react";
+import {
+  Box,
+  TextField,
+  Button,
+  Typography,
+  Paper,
+  Alert
+} from "@mui/material";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { useNavigate, Link } from "react-router-dom";
-import { Box, Button, TextField, Typography, Paper } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [adminCode, setAdminCode] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
 
-  const login = async () => {
+  async function handleLogin() {
+    setError("");
+    setLoading(true);
+
     try {
-      const res = await signInWithEmailAndPassword(auth, email, password);
-      const uid = res.user.uid;
-
-      const snap = await getDoc(doc(db, "users", uid));
-      const data = snap.exists() ? snap.data() : {};
-
-      let role = data?.role || "user";
-      let name = data?.name || email;
-
-      // ADMIN OVERRIDE
-      if (adminCode === "SUPERADMIN123") {
-        role = "admin";
-        name = name || "Admin";
-      }
-
-      // 🔑 CRITICAL: persist user session
-      localStorage.setItem(
-        "userData",
-        JSON.stringify({ uid, role, name })
+      // 🔐 AUTH LOGIN
+      const cred = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
       );
 
-      if (role === "admin") {
-        navigate("/admin", { replace: true });
-      } else {
-        navigate("/", { replace: true });
+      const uid = cred.user.uid;
+
+      // 🔎 FETCH FIRESTORE USER
+      const userSnap = await getDoc(doc(db, "users", uid));
+
+      if (!userSnap.exists()) {
+        throw new Error("User profile not found. Contact admin.");
       }
 
+      const userData = userSnap.data();
+
+      // 🛑 HARD GUARD (PREVENTS storeNumber crash)
+      if (!userData.role || !userData.storeNumber) {
+        throw new Error("User account misconfigured.");
+      }
+
+      // ✅ SAVE LOCALLY
+      localStorage.setItem(
+        "userData",
+        JSON.stringify({
+          uid,
+          name: userData.name,
+          role: userData.role,
+          storeNumber: userData.storeNumber
+        })
+      );
+
+      navigate("/admin");
     } catch (err) {
-      alert(err.message);
+      console.error(err);
+      setError(err.message || "Login failed");
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
   return (
-    <Box sx={{ p: 3, maxWidth: 400, mx: "auto" }}>
-      <Paper sx={{ p: 4 }}>
-        <Typography variant="h5" sx={{ mb: 3 }} align="center">
-          Login
+    <Box sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
+      <Paper sx={{ p: 3, width: 360 }}>
+        <Typography variant="h6" mb={2}>
+          Admin Login
         </Typography>
+
+        {error && <Alert severity="error">{error}</Alert>}
 
         <TextField
           label="Email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
           fullWidth
-          sx={{ mb: 2 }}
-          onChange={(e) => setEmail(e.target.value)}
+          margin="normal"
         />
 
         <TextField
           label="Password"
           type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
           fullWidth
-          sx={{ mb: 3 }}
-          onChange={(e) => setPassword(e.target.value)}
+          margin="normal"
         />
 
-        <TextField
-          label="Admin Code (optional)"
+        <Button
+          variant="contained"
           fullWidth
-          sx={{ mb: 3 }}
-          onChange={(e) => setAdminCode(e.target.value)}
-        />
-
-        <Button variant="contained" fullWidth onClick={login}>
-          Login
+          sx={{ mt: 2 }}
+          disabled={loading}
+          onClick={handleLogin}
+        >
+          {loading ? "Signing in..." : "Login"}
         </Button>
-
-      
       </Paper>
     </Box>
   );

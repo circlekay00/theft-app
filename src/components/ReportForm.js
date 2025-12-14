@@ -1,41 +1,45 @@
-// src/components/ReportForm.js
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Typography,
-  TextField,
-  Button,
-  MenuItem,
+  Box,
   Paper,
+  TextField,
+  MenuItem,
+  Button,
+  Typography,
   Stack,
+  CircularProgress,
   Snackbar,
   Alert,
-  useTheme,
-  useMediaQuery,
 } from "@mui/material";
-import { db } from "../firebase";
+
 import {
   collection,
-  getDocs,
   addDoc,
+  getDocs,
   serverTimestamp,
+  doc,
+  getDoc,
 } from "firebase/firestore";
 
+import { auth, db } from "../firebase";
+
 export default function ReportForm() {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   const [categories, setCategories] = useState([]);
-  const [selectedCatId, setSelectedCatId] = useState("");
   const [subcategories, setSubcategories] = useState([]);
-
   const [offenders, setOffenders] = useState([]);
-  const [selectedOffender, setSelectedOffender] = useState("");
 
-  const [fields, setFields] = useState([]);
-  const [fieldValues, setFieldValues] = useState({});
-  const [selectedSub, setSelectedSub] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [subcategory, setSubcategory] = useState("");
+  const [offender, setOffender] = useState("");
 
-  const [submitting, setSubmitting] = useState(false); // ✅
+  const [storeNumber, setStoreNumber] = useState("");
+  const [userStore, setUserStore] = useState("");
+
+  const [details, setDetails] = useState("");
+  const [policeReport, setPoliceReport] = useState("");
 
   const [snack, setSnack] = useState({
     open: false,
@@ -43,132 +47,143 @@ export default function ReportForm() {
     severity: "success",
   });
 
-  const user = JSON.parse(localStorage.getItem("userData") || "null");
-
-  // ---------------- LOAD DATA ----------------
+  // ---------------- LOAD BASE DATA ----------------
   useEffect(() => {
-    loadCategories();
-    loadOffenders();
-    loadFields();
+    const load = async () => {
+      try {
+        const catSnap = await getDocs(collection(db, "categories"));
+        setCategories(catSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        const offSnap = await getDocs(collection(db, "offenders"));
+        setOffenders(offSnap.docs.map(d => d.data().name));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
   }, []);
 
-  async function loadCategories() {
-    const snap = await getDocs(collection(db, "categories"));
-    setCategories(
-      snap.docs.map((d) => ({
-        id: d.id,
-        name: d.data().name,
-        subcategories: d.data().subcategories || [],
-      }))
-    );
-  }
-
-  async function loadOffenders() {
-    const snap = await getDocs(collection(db, "offenders"));
-    setOffenders(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  }
-
-  async function loadFields() {
-    const snap = await getDocs(collection(db, "fields"));
-    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    setFields(list);
-
-    const initial = {};
-    list.forEach((f) => (initial[f.name] = ""));
-    setFieldValues(initial);
-  }
-
+  // ---------------- LOAD USER STORE ----------------
   useEffect(() => {
-    const cat = categories.find((c) => c.id === selectedCatId);
-    setSubcategories(cat ? cat.subcategories : []);
-    setSelectedSub("");
-  }, [selectedCatId, categories]);
+    const loadUserStore = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
 
-  function updateField(name, value) {
-    setFieldValues((prev) => ({ ...prev, [name]: value }));
-  }
+      const snap = await getDoc(doc(db, "users", user.uid));
+      if (snap.exists()) {
+        const store = String(snap.data().storeNumber || "").trim();
+        setUserStore(store);
+        setStoreNumber(store);
+      }
+    };
+
+    loadUserStore();
+  }, []);
+
+  // ---------------- CATEGORY → SUBCATEGORY ----------------
+  useEffect(() => {
+    if (!categoryId) {
+      setSubcategories([]);
+      setSubcategory("");
+      return;
+    }
+
+    const cat = categories.find(c => c.id === categoryId);
+    const subs = Array.isArray(cat?.subcategories) ? cat.subcategories : [];
+
+    setSubcategories(subs);
+    setSubcategory("");
+  }, [categoryId, categories]);
 
   // ---------------- SUBMIT ----------------
-  async function submitReport() {
-    if (!selectedCatId || !selectedSub) {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!categoryId || !subcategory || !offender || !storeNumber || !details) {
       setSnack({
         open: true,
-        message: "Please select category and subcategory",
-        severity: "warning",
+        message: "All required fields must be filled out",
+        severity: "error",
       });
       return;
     }
 
-    try {
-      setSubmitting(true); // ✅ LOCK FORM
+    setSubmitting(true);
 
+    try {
       await addDoc(collection(db, "reports"), {
-        reporterId: user?.uid || null,
-        reporterName: user?.name || "Guest",
-        categoryId: selectedCatId,
-        subcategory: selectedSub,
-        offender: selectedOffender || "",
-        fields: fieldValues,
+        categoryId,
+        subcategory,
+        offender,
+        storeNumber: String(storeNumber).trim(),
         status: "Pending",
+
+        fields: {
+          Details: details,
+          policeReport: policeReport || "",
+        },
+
+        reporterId: auth.currentUser.uid,
+        reporterName: auth.currentUser.displayName || "User",
+
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      setCategoryId("");
+      setSubcategory("");
+      setOffender("");
+      setDetails("");
+      setPoliceReport("");
+
+      if (!userStore) {
+        setStoreNumber("");
+      }
 
       setSnack({
         open: true,
         message: "Report submitted successfully",
         severity: "success",
       });
-
-      setSelectedCatId("");
-      setSelectedSub("");
-      setSelectedOffender("");
-
-      const reset = {};
-      fields.forEach((f) => (reset[f.name] = ""));
-      setFieldValues(reset);
-
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
       setSnack({
         open: true,
         message: "Failed to submit report",
         severity: "error",
       });
     } finally {
-      setSubmitting(false); // ✅ UNLOCK FORM
+      setSubmitting(false);
     }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ p: 3, textAlign: "center" }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
   return (
-    <>
-      <Paper
-        elevation={isMobile ? 0 : 3}
-        sx={{
-          p: isMobile ? 2 : 3,
-          maxWidth: 600,
-          mx: "auto",
-          mt: isMobile ? 1 : 3,
-          borderRadius: isMobile ? 0 : 2,
-        }}
-      >
-        <Typography
-          variant={isMobile ? "h6" : "h5"}
-          sx={{ mb: 2, textAlign: "center" }}
-        >
-          Submit Report
-        </Typography>
+    <Paper sx={{ p: 3, maxWidth: 600, mx: "auto" }}>
+      <Typography variant="h6" mb={2}>
+        Submit Incident Report
+      </Typography>
 
-        <Stack spacing={isMobile ? 1.5 : 2}>
+      <form onSubmit={handleSubmit}>
+        <Stack spacing={2}>
           <TextField
             select
-            disabled={submitting}
             label="Category"
-            value={selectedCatId}
-            onChange={(e) => setSelectedCatId(e.target.value)}
-            fullWidth
+            value={categoryId}
+            onChange={e => setCategoryId(e.target.value)}
+            required
           >
-            {categories.map((c) => (
+            {categories.map(c => (
               <MenuItem key={c.id} value={c.id}>
                 {c.name}
               </MenuItem>
@@ -177,11 +192,12 @@ export default function ReportForm() {
 
           <TextField
             select
-            disabled={submitting || !subcategories.length}
             label="Subcategory"
-            value={selectedSub}
-            onChange={(e) => setSelectedSub(e.target.value)}
-            fullWidth
+            value={subcategory}
+            onChange={e => setSubcategory(e.target.value)}
+            required
+            disabled={!subcategories.length}
+            helperText={!subcategories.length ? "Select a category first" : ""}
           >
             {subcategories.map((s, i) => (
               <MenuItem key={i} value={s}>
@@ -192,64 +208,61 @@ export default function ReportForm() {
 
           <TextField
             select
-            disabled={submitting}
-            label="Known Offender"
-            value={selectedOffender}
-            onChange={(e) => setSelectedOffender(e.target.value)}
-            fullWidth
+            label="Offender"
+            value={offender}
+            onChange={e => setOffender(e.target.value)}
+            required
           >
-            <MenuItem value="">None</MenuItem>
-            {offenders.map((o) => (
-              <MenuItem key={o.id} value={o.name}>
-                {o.name}
+            {offenders.map((o, i) => (
+              <MenuItem key={i} value={o}>
+                {o}
               </MenuItem>
             ))}
           </TextField>
 
-          {fields.map((f) => (
-            <TextField
-              key={f.id}
-              disabled={submitting}
-              label={f.name}
-              value={fieldValues[f.name]}
-              onChange={(e) => updateField(f.name, e.target.value)}
-              fullWidth
-              multiline={f.type === "textarea"}
-              rows={f.type === "textarea" ? 3 : 1}
-            />
-          ))}
+          <TextField
+            label="Store Number"
+            value={storeNumber}
+            onChange={e => setStoreNumber(e.target.value)}
+            required
+            disabled={Boolean(userStore)}
+            helperText={userStore ? "Assigned store" : "Enter store number"}
+          />
+
+          <TextField
+            label="Details"
+            value={details}
+            onChange={e => setDetails(e.target.value)}
+            multiline
+            rows={4}
+            required
+          />
+
+          <TextField
+            label="Police Report # (optional)"
+            value={policeReport}
+            onChange={e => setPoliceReport(e.target.value)}
+          />
 
           <Button
+            type="submit"
             variant="contained"
-            size={isMobile ? "large" : "medium"}
-            fullWidth
-            onClick={submitReport}
             disabled={submitting}
-            sx={{ mt: 1 }}
           >
             {submitting ? "Submitting…" : "Submit Report"}
           </Button>
         </Stack>
-      </Paper>
+      </form>
 
       <Snackbar
-        key={snack.message}
         open={snack.open}
         autoHideDuration={4000}
-        onClose={() => setSnack((s) => ({ ...s, open: false }))}
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "center",
-        }}
+        onClose={() => setSnack(s => ({ ...s, open: false }))}
       >
-        <Alert
-          onClose={() => setSnack((s) => ({ ...s, open: false }))}
-          severity={snack.severity}
-          sx={{ width: "100%" }}
-        >
+        <Alert severity={snack.severity} sx={{ width: "100%" }}>
           {snack.message}
         </Alert>
       </Snackbar>
-    </>
+    </Paper>
   );
 }

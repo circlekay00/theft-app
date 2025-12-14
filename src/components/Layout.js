@@ -1,81 +1,97 @@
-import React from "react";
-import { Link, useLocation } from "react-router-dom";
-import "./Layout.css";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { AppBar, Toolbar, Button, Box } from "@mui/material";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 export default function Layout({ children }) {
-  const location = useLocation();
-  const isAdmin = location.pathname.startsWith("/admin");
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      setUser(u || null);
+      setRole(null);
+
+      if (u) {
+        const snap = await getDoc(doc(db, "users", u.uid));
+        if (snap.exists()) {
+          setRole(snap.data().role || "user");
+        }
+      }
+    });
+
+    return () => unsub();
+  }, []);
 
   return (
-    <div className="layout-container">
-      <nav className="top-nav">
-        <div className="nav-left">
-          <Link
-            to="/"
-            className={`nav-item ${location.pathname === "/" ? "active" : ""}`}
-          >
-            Submit Report
-          </Link>
+    <>
+      <AppBar position="static">
+        <Toolbar>
+          <Box sx={{ flexGrow: 1 }}>
+            {/* PUBLIC (LOGGED OUT ONLY) */}
+            {!user && (
+              <>
+                <Button color="inherit" component={Link} to="/login">
+                  Login
+                </Button>
+                <Button color="inherit" component={Link} to="/register">
+                  Register
+                </Button>
+              </>
+            )}
 
-          <Link
-            to="/admin"
-            className={`nav-item ${
-              location.pathname.startsWith("/admin") ? "active" : ""
-            }`}
-          >
-            Admin Dashboard
-          </Link>
+            {/* AUTHENTICATED USERS */}
+            {user && (
+              <Button color="inherit" component={Link} to="/">
+                Report Form
+              </Button>
+            )}
 
-          <Link
-            to="/manage-categories"
-            className={`nav-item ${
-              location.pathname === "/manage-categories" ? "active" : ""
-            }`}
-          >
-            Categories
-          </Link>
+            {/* ADMIN LINKS */}
+            {user && (role === "admin" || role === "superadmin") && (
+              <>
+                <Button color="inherit" component={Link} to="/admin">
+                  Dashboard
+                </Button>
 
-          <Link
-            to="/manage-subcategories"
-            className={`nav-item ${
-              location.pathname === "/manage-subcategories" ? "active" : ""
-            }`}
-          >
-            Subcategories
-          </Link>
+                <Button color="inherit" component={Link} to="/manage-categories">
+                  Categories
+                </Button>
 
-          <Link
-            to="/manage-offenders"
-            className={`nav-item ${
-              location.pathname === "/manage-offenders" ? "active" : ""
-            }`}
-          >
-            Offenders
-          </Link>
+                <Button color="inherit" component={Link} to="/manage-subcategories">
+                  Subcategories
+                </Button>
 
-          <Link
-            to="/manage-fields"
-            className={`nav-item ${
-              location.pathname === "/manage-fields" ? "active" : ""
-            }`}
-          >
-            Custom Fields
-          </Link>
-        </div>
+                <Button color="inherit" component={Link} to="/manage-fields">
+                  Custom Fields
+                </Button>
 
-        <div className="nav-right">
-          <Link
-            to="/logout"
-            className={`nav-item ${
-              location.pathname === "/logout" ? "active" : ""
-            }`}
-          >
-            Logout
-          </Link>
-        </div>
-      </nav>
+                <Button color="inherit" component={Link} to="/manage-offenders">
+                  Offenders
+                </Button>
+              </>
+            )}
 
-      <main className="content-area">{children}</main>
-    </div>
+            {/* SUPER ADMIN ONLY */}
+            {user && role === "superadmin" && (
+              <Button color="inherit" component={Link} to="/manage-users">
+                Users
+              </Button>
+            )}
+          </Box>
+
+          {/* RIGHT SIDE */}
+          {user && (
+            <Button color="inherit" component={Link} to="/logout">
+              Logout
+            </Button>
+          )}
+        </Toolbar>
+      </AppBar>
+
+      {children}
+    </>
   );
 }

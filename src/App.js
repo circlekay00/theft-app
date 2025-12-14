@@ -8,8 +8,10 @@ import ManageCategories from "./components/ManageCategories";
 import ManageSubcategories from "./components/ManageSubcategories";
 import ManageOffenders from "./components/ManageOffenders";
 import ManageFields from "./components/ManageFields";
+import ManageUsers from "./components/ManageUsers";
 import Logout from "./components/Logout";
 import Login from "./components/Login";
+import Register from "./components/Register";
 
 import RequireAdmin from "./components/RequireAdmin";
 
@@ -18,13 +20,15 @@ export default function App() {
     <Router>
       <Layout>
         <Routes>
-          {/* Public */}
+          {/* AUTH */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/logout" element={<Logout />} />
+
+          {/* LOGGED IN USERS */}
           <Route path="/" element={<ReportForm />} />
 
-          {/* Login */}
-          <Route path="/login" element={<Login />} />
-
-          {/* Admin Protected Routes */}
+          {/* ADMIN */}
           <Route
             path="/admin"
             element={
@@ -70,8 +74,14 @@ export default function App() {
             }
           />
 
-          {/* Logout */}
-          <Route path="/logout" element={<Logout />} />
+          <Route
+            path="/manage-users"
+            element={
+              <RequireAdmin>
+                <ManageUsers />
+              </RequireAdmin>
+            }
+          />
         </Routes>
       </Layout>
     </Router>
