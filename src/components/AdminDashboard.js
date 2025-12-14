@@ -237,7 +237,18 @@ export default function AdminDashboard() {
 
       {/* FILTER BAR */}
       <Paper sx={{ p: 1, mb: 1 }}>
-        <Stack direction="row" spacing={1} flexWrap="wrap">
+        <Stack
+  direction="row"
+  spacing={2}
+  flexWrap="wrap"
+  alignItems="center"
+  sx={{
+    "& > *": {
+      minWidth: 180,
+    },
+  }}
+>
+
           <TextField
             size="small"
             placeholder="Search…"
