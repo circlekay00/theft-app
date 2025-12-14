@@ -95,7 +95,6 @@ export default function AdminDashboard() {
         for (const d of snap.docs) {
           const data = d.data();
 
-          // 🔒 STORE RESTRICTION (admins only)
           if (userRole !== "superadmin") {
             if (String(data.storeNumber || "").trim() !== userStore) continue;
           }
@@ -238,17 +237,17 @@ export default function AdminDashboard() {
       {/* FILTER BAR */}
       <Paper sx={{ p: 1, mb: 1 }}>
         <Stack
-  direction="row"
-  spacing={2}
-  flexWrap="wrap"
-  alignItems="center"
-  sx={{
-    "& > *": {
-      minWidth: 180,
-    },
-  }}
->
-
+          direction="row"
+          spacing={2}
+          flexWrap="wrap"
+          alignItems="center"
+          sx={{
+            flexWrap: "wrap",
+            "& .MuiTextField-root": { minWidth: 180 },
+            "& .MuiInputBase-root": { minHeight: 40 },
+            "& .MuiButton-root": { minWidth: 140, minHeight: 40 },
+          }}
+        >
           <TextField
             size="small"
             placeholder="Search…"

@@ -14,6 +14,7 @@ import Login from "./components/Login";
 import Register from "./components/Register";
 
 import RequireAdmin from "./components/RequireAdmin";
+import RequireSuperAdmin from "./components/RequireSuperAdmin";
 
 export default function App() {
   return (
@@ -28,7 +29,7 @@ export default function App() {
           {/* LOGGED IN USERS */}
           <Route path="/" element={<ReportForm />} />
 
-          {/* ADMIN */}
+          {/* ADMIN + SUPERADMIN */}
           <Route
             path="/admin"
             element={
@@ -38,48 +39,49 @@ export default function App() {
             }
           />
 
+          {/* SUPERADMIN ONLY */}
           <Route
             path="/manage-categories"
             element={
-              <RequireAdmin>
+              <RequireSuperAdmin>
                 <ManageCategories />
-              </RequireAdmin>
+              </RequireSuperAdmin>
             }
           />
 
           <Route
             path="/manage-subcategories"
             element={
-              <RequireAdmin>
+              <RequireSuperAdmin>
                 <ManageSubcategories />
-              </RequireAdmin>
+              </RequireSuperAdmin>
             }
           />
 
           <Route
             path="/manage-offenders"
             element={
-              <RequireAdmin>
+              <RequireSuperAdmin>
                 <ManageOffenders />
-              </RequireAdmin>
+              </RequireSuperAdmin>
             }
           />
 
           <Route
             path="/manage-fields"
             element={
-              <RequireAdmin>
+              <RequireSuperAdmin>
                 <ManageFields />
-              </RequireAdmin>
+              </RequireSuperAdmin>
             }
           />
 
           <Route
             path="/manage-users"
             element={
-              <RequireAdmin>
+              <RequireSuperAdmin>
                 <ManageUsers />
-              </RequireAdmin>
+              </RequireSuperAdmin>
             }
           />
         </Routes>

@@ -1,29 +1,47 @@
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { CircularProgress, Box } from "@mui/material";
 
 export default function RequireAdmin({ children }) {
-  const stored = localStorage.getItem("userData");
+  const [loading, setLoading] = useState(true);
+  const [allowed, setAllowed] = useState(false);
 
-  if (!stored) {
-    return <Navigate to="/login" replace />;
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setAllowed(false);
+        setLoading(false);
+        return;
+      }
+
+      const snap = await getDoc(doc(db, "users", user.uid));
+
+      if (snap.exists()) {
+        const role = snap.data().role;
+        setAllowed(role === "admin" || role === "superadmin");
+      } else {
+        setAllowed(false);
+      }
+
+      setLoading(false);
+    });
+
+    return () => unsub();
+  }, []);
+
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
-  let user;
-  try {
-    user = JSON.parse(stored);
-  } catch {
-    localStorage.removeItem("userData");
+  if (!allowed) {
     return <Navigate to="/login" replace />;
-  }
-
-  // HARD GUARDS — PREVENT CRASHES
-  if (!user.role || !user.storeNumber) {
-    localStorage.removeItem("userData");
-    return <Navigate to="/login" replace />;
-  }
-
-  // ALLOW admin + superadmin ONLY
-  if (user.role !== "admin" && user.role !== "superadmin") {
-    return <Navigate to="/" replace />;
   }
 
   return children;

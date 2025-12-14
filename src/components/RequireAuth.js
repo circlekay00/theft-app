@@ -1,23 +1,23 @@
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
-import { CircularProgress, Box } from "@mui/material";
+import { Box, CircularProgress } from "@mui/material";
 
-export default function RequireAuth({ children }) {
-  const [checking, setChecking] = useState(true);
+export default function RequireAuth() {
+  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      setChecking(false);
+      setLoading(false);
     });
 
     return () => unsub();
   }, []);
 
-  if (checking) {
+  if (loading) {
     return (
       <Box sx={{ p: 4, textAlign: "center" }}>
         <CircularProgress />
@@ -29,5 +29,5 @@ export default function RequireAuth({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  return children;
+  return <Outlet />;
 }
