@@ -226,9 +226,10 @@ export default function AdminDashboard() {
   return (
     <Box sx={{ p: 1.5, minHeight: "100vh" }}>
       <Stack direction="row" justifyContent="space-between" mb={1}>
-        <Typography variant="h6" fontWeight={600}>
-          Admin Dashboard
-        </Typography>
+        <Typography variant="h6" fontWeight={600} sx={{ color: '#EA732D' }}>
+  Admin Dashboard
+</Typography>
+
         <Typography variant="caption">
           {filteredReports.length} reports
         </Typography>
@@ -322,17 +323,18 @@ export default function AdminDashboard() {
           <TableContainer>
             <Table size="small">
               <TableHead>
-                <TableRow>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Store</TableCell>
-                  <TableCell>Category</TableCell>
-                  <TableCell>Subcategory</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Offender</TableCell>
-                  <TableCell>Police</TableCell>
-                  <TableCell sx={{ width: "40%" }}>Details</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
+             <TableRow>
+  <TableCell sx={{ fontWeight: 'bold', color: '#FFC038' }}>Date</TableCell>
+  <TableCell sx={{ fontWeight: 'bold', color: '#FFC038' }}>Store</TableCell>
+  <TableCell sx={{ fontWeight: 'bold', color: '#FFC038' }}>Category</TableCell>
+  <TableCell sx={{ fontWeight: 'bold', color: '#FFC038' }}>Subcategory</TableCell>
+  <TableCell sx={{ fontWeight: 'bold', color: '#FFC038' }}>Status</TableCell>
+  <TableCell sx={{ fontWeight: 'bold', color: '#FFC038' }}>Offender</TableCell>
+  <TableCell sx={{ fontWeight: 'bold', color: '#FFC038' }}>Police</TableCell>
+  <TableCell sx={{ fontWeight: 'bold', color: '#FFC038', width: "40%" }}>Details</TableCell>
+  <TableCell sx={{ fontWeight: 'bold', color: '#FFC038' }} align="right">Actions</TableCell>
+</TableRow>
+
               </TableHead>
 
               <TableBody>
