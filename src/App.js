@@ -12,7 +12,7 @@ import ManageUsers from "./components/ManageUsers";
 import Logout from "./components/Logout";
 import Login from "./components/Login";
 import Register from "./components/Register";
-
+import Stats from "./components/Stats"; // Add this import for Stats page
 import RequireAdmin from "./components/RequireAdmin";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
 
@@ -84,6 +84,9 @@ export default function App() {
               </RequireSuperAdmin>
             }
           />
+
+          {/* Add this in your Routes in App.js */}
+          <Route path="/stats" element={<Stats />} /> {/* Stats Route */}
         </Routes>
       </Layout>
     </Router>

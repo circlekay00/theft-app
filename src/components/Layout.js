@@ -60,11 +60,15 @@ export default function Layout({ children }) {
               </Button>
             )}
 
-            {/* ADMIN */}
+            {/* ADMIN + SUPERADMIN */}
             {user && (role === "admin" || role === "superadmin") && (
               <>
                 <Button color="inherit" component={Link} to="/admin">
                   Dashboard
+                </Button>
+                {/* Link to Stats */}
+                <Button color="inherit" component={Link} to="/stats">
+                  Stats
                 </Button>
               </>
             )}
