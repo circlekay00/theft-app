@@ -17,16 +17,28 @@ export default function RequireAdmin({ children }) {
         return;
       }
 
-      const snap = await getDoc(doc(db, "users", user.uid));
-
-      if (snap.exists()) {
-        const role = snap.data().role;
-        setAllowed(role === "admin" || role === "superadmin");
-      } else {
+      // ❌ If user is anonymous, we cannot check Firestore, block access
+      if (!user.email) {
         setAllowed(false);
+        setLoading(false);
+        return;
       }
 
-      setLoading(false);
+      try {
+        const snap = await getDoc(doc(db, "admins", user.email));
+
+        if (snap.exists()) {
+          const role = snap.data().role;
+          setAllowed(role === "admin" || role === "superadmin");
+        } else {
+          setAllowed(false);
+        }
+      } catch (err) {
+        console.error("RequireAdmin Firestore error:", err);
+        setAllowed(false);
+      } finally {
+        setLoading(false);
+      }
     });
 
     return () => unsub();
