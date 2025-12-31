@@ -376,30 +376,34 @@ export default function AdminDashboard() {
                         </Tooltip>
                       </TableCell>
 
-                      <TableCell align="right">
-                        <Button
-                          size="small"
-                          onClick={() => {
-                            setSelectedReport(r);
-                            setEditOpen(true);
-                          }}
-                        >
-                          Edit
-                        </Button>
+                     <TableCell align="right">
+  <Button
+    size="small"
+    onClick={() => {
+      setSelectedReport(r);
+      setEditOpen(true);
+    }}
+  >
+    Edit
+  </Button>
 
-                        <Button
-                          size="small"
-                          color="error"
-                          onClick={async () => {
-                            if (!window.confirm("Delete this report?")) return;
-                            await deleteDoc(doc(db, "reports", r.id));
-                            setReports(p => p.filter(x => x.id !== r.id));
-                            setFilteredReports(p => p.filter(x => x.id !== r.id));
-                          }}
-                        >
-                          Delete
-                        </Button>
-                      </TableCell>
+  {/* Show Delete only for superadmins */}
+  {userRole === "superadmin" && (
+    <Button
+      size="small"
+      color="error"
+      onClick={async () => {
+        if (!window.confirm("Delete this report?")) return;
+        await deleteDoc(doc(db, "reports", r.id));
+        setReports(p => p.filter(x => x.id !== r.id));
+        setFilteredReports(p => p.filter(x => x.id !== r.id));
+      }}
+    >
+      Delete
+    </Button>
+  )}
+</TableCell>
+
                     </TableRow>
                   ))}
               </TableBody>
