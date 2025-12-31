@@ -11,22 +11,14 @@ export default function RequireAdmin({ children }) {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setAllowed(false);
-        setLoading(false);
-        return;
-      }
-
-      // ❌ If user is anonymous, we cannot check Firestore, block access
-      if (!user.email) {
+      if (!user || !user.email) {
         setAllowed(false);
         setLoading(false);
         return;
       }
 
       try {
-        const snap = await getDoc(doc(db, "admins", user.email));
-
+        const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists()) {
           const role = snap.data().role;
           setAllowed(role === "admin" || role === "superadmin");
@@ -34,7 +26,7 @@ export default function RequireAdmin({ children }) {
           setAllowed(false);
         }
       } catch (err) {
-        console.error("RequireAdmin Firestore error:", err);
+        console.error("RequireAdmin Firestore error:", err.message);
         setAllowed(false);
       } finally {
         setLoading(false);

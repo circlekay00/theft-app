@@ -1,28 +1,52 @@
-import { Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { doc, getDoc } from "firebase/firestore";
+import { CircularProgress, Box } from "@mui/material";
 
 export default function RequireSuperAdmin({ children }) {
-  const [allowed, setAllowed] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    const check = async () => {
-      const user = auth.currentUser;
-      if (!user) {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user || !user.email) {
         setAllowed(false);
+        setLoading(false);
         return;
       }
 
-      const snap = await getDoc(doc(db, "users", user.uid));
-      setAllowed(snap.exists() && snap.data().role === "superadmin");
-    };
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          const role = snap.data().role;
+          setAllowed(role === "superadmin");
+        } else {
+          setAllowed(false);
+        }
+      } catch (err) {
+        console.error("RequireSuperAdmin Firestore error:", err.message);
+        setAllowed(false);
+      } finally {
+        setLoading(false);
+      }
+    });
 
-    check();
+    return () => unsub();
   }, []);
 
-  if (allowed === null) return null;
-  if (!allowed) return <Navigate to="/" replace />;
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!allowed) {
+    return <Navigate to="/login" replace />;
+  }
 
   return children;
 }

@@ -12,7 +12,7 @@ import ManageUsers from "./components/ManageUsers";
 import Logout from "./components/Logout";
 import Login from "./components/Login";
 import Register from "./components/Register";
-import Stats from "./components/Stats"; // Add this import for Stats page
+import Stats from "./components/Stats";
 import RequireAdmin from "./components/RequireAdmin";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
 
@@ -48,7 +48,6 @@ export default function App() {
               </RequireSuperAdmin>
             }
           />
-
           <Route
             path="/manage-subcategories"
             element={
@@ -57,7 +56,6 @@ export default function App() {
               </RequireSuperAdmin>
             }
           />
-
           <Route
             path="/manage-offenders"
             element={
@@ -66,7 +64,6 @@ export default function App() {
               </RequireSuperAdmin>
             }
           />
-
           <Route
             path="/manage-fields"
             element={
@@ -75,7 +72,6 @@ export default function App() {
               </RequireSuperAdmin>
             }
           />
-
           <Route
             path="/manage-users"
             element={
@@ -85,8 +81,8 @@ export default function App() {
             }
           />
 
-          {/* Add this in your Routes in App.js */}
-          <Route path="/stats" element={<Stats />} /> {/* Stats Route */}
+          {/* STATS */}
+          <Route path="/stats" element={<Stats />} />
         </Routes>
       </Layout>
     </Router>

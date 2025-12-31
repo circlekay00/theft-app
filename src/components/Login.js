@@ -1,108 +1,92 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebase";
+
 import {
   Box,
+  Paper,
   TextField,
   Button,
   Typography,
-  Paper,
-  Alert
+  Stack,
+  Alert,
+  Snackbar,
 } from "@mui/material";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [snack, setSnack] = useState({
+    open: false,
+    message: "",
+    severity: "error",
+  });
 
   const navigate = useNavigate();
 
-  async function handleLogin() {
-    setError("");
+  const handleLogin = async (e) => {
+    e.preventDefault();
     setLoading(true);
 
     try {
-      // 🔐 AUTH LOGIN
-      const cred = await signInWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
+      await signInWithEmailAndPassword(auth, email, password);
 
-      const uid = cred.user.uid;
-
-      // 🔎 FETCH FIRESTORE USER
-      const userSnap = await getDoc(doc(db, "users", uid));
-
-      if (!userSnap.exists()) {
-        throw new Error("User profile not found. Contact admin.");
-      }
-
-      const userData = userSnap.data();
-
-      // 🛑 HARD GUARD (PREVENTS storeNumber crash)
-      if (!userData.role || !userData.storeNumber) {
-        throw new Error("User account misconfigured.");
-      }
-
-      // ✅ SAVE LOCALLY
-      localStorage.setItem(
-        "userData",
-        JSON.stringify({
-          uid,
-          name: userData.name,
-          role: userData.role,
-          storeNumber: userData.storeNumber
-        })
-      );
-
-      navigate("/admin");
+      // ✅ Navigate to home page (ReportForm) after login
+      navigate("/", { replace: true });
     } catch (err) {
-      console.error(err);
-      setError(err.message || "Login failed");
+      console.error("Login failed:", err.message);
+      setSnack({
+        open: true,
+        message: "Invalid email or password",
+        severity: "error",
+      });
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <Box sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
-      <Paper sx={{ p: 3, width: 360 }}>
-        <Typography variant="h6" mb={2}>
-          Admin Login
+      <Paper sx={{ p: 4, width: 400 }}>
+        <Typography variant="h6" mb={2} align="center">
+          Login
         </Typography>
 
-        {error && <Alert severity="error">{error}</Alert>}
+        <form onSubmit={handleLogin}>
+          <Stack spacing={2}>
+            <TextField
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
 
-        <TextField
-          label="Email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          fullWidth
-          margin="normal"
-        />
+            <TextField
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
 
-        <TextField
-          label="Password"
-          type="password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          fullWidth
-          margin="normal"
-        />
+            <Button type="submit" variant="contained" disabled={loading}>
+              {loading ? "Logging in…" : "Login"}
+            </Button>
+          </Stack>
+        </form>
 
-        <Button
-          variant="contained"
-          fullWidth
-          sx={{ mt: 2 }}
-          disabled={loading}
-          onClick={handleLogin}
+        <Snackbar
+          open={snack.open}
+          autoHideDuration={4000}
+          onClose={() => setSnack((s) => ({ ...s, open: false }))}
         >
-          {loading ? "Signing in..." : "Login"}
-        </Button>
+          <Alert severity={snack.severity} sx={{ width: "100%" }}>
+            {snack.message}
+          </Alert>
+        </Snackbar>
       </Paper>
     </Box>
   );

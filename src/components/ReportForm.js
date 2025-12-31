@@ -49,34 +49,47 @@ export default function ReportForm() {
 
   // ---------------- LOAD BASE DATA ----------------
   useEffect(() => {
-    const load = async () => {
-      try {
-        const catSnap = await getDocs(collection(db, "categories"));
-        setCategories(catSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const loadBaseData = async () => {
+      const user = auth.currentUser;
 
-        const offSnap = await getDocs(collection(db, "offenders"));
-        setOffenders(offSnap.docs.map(d => d.data().name));
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
+      // Only admins/superadmins load categories/offenders
+      if (user?.email) {
+        try {
+          const catSnap = await getDocs(collection(db, "categories"));
+          setCategories(catSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+          const offSnap = await getDocs(collection(db, "offenders"));
+          setOffenders(offSnap.docs.map(d => d.data().name));
+        } catch (err) {
+          console.error("Failed to load categories/offenders:", err.message);
+        }
       }
+
+      // Always stop loading
+      setLoading(false);
     };
 
-    load();
+    loadBaseData();
   }, []);
 
   // ---------------- LOAD USER STORE ----------------
   useEffect(() => {
     const loadUserStore = async () => {
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user || !user.email) {
+        // Anonymous user — skip Firestore read
+        return;
+      }
 
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (snap.exists()) {
-        const store = String(snap.data().storeNumber || "").trim();
-        setUserStore(store);
-        setStoreNumber(store);
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          const store = String(snap.data().storeNumber || "").trim();
+          setUserStore(store);
+          setStoreNumber(store);
+        }
+      } catch (err) {
+        console.error("Failed to load user store:", err.message);
       }
     };
 
@@ -126,8 +139,8 @@ export default function ReportForm() {
           policeReport: policeReport || "",
         },
 
-        reporterId: auth.currentUser.uid,
-        reporterName: auth.currentUser.displayName || "User",
+        reporterId: auth.currentUser?.uid || "anonymous",
+        reporterName: auth.currentUser?.displayName || "User",
 
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -149,7 +162,7 @@ export default function ReportForm() {
         severity: "success",
       });
     } catch (e) {
-      console.error(e);
+      console.error("Failed to submit report:", e.message);
       setSnack({
         open: true,
         message: "Failed to submit report",
